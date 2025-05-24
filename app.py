@@ -13,6 +13,10 @@ import logging
 import plotly.express as px
 from gtts import gTTS
 import os
+import networkx as nx
+from pyvis.network import Network
+from scipy.spatial.distance import euclidean
+import streamlit.components.v1 as components
 
 # === CONFIGURE ===
 API_TOKEN = "KLRDg3ElBVveVghcN61aScAJevKMgofJF7CWcsVwG2mYt0mUQF63DdB0n6OHqOo9WYCilH7bjJ6s9sIc4zT9zzeCyPXhvytRL4wMAtbV5fRxnAmLFtEI9KXO5tvnu0Pm3rwhAfx5tXGiQOKEm98U2lGTZOIVav2hRtGwsU8SrzUPpZA6CNSNCGkCNp3sndYsrAqeme9xsqFGNEla2PBgjZ0ertc6j8nzCVzUQ8gX2T9hFnR8SoKRA7eyRMHRMDrn"
@@ -64,7 +68,13 @@ translations = {
         "feature_importance": "Feature Importance for Soil Fertility Prediction",
         "agrodealer_map": "Agro-Dealer Locations",
         "soil_parameter_dist": "Soil Parameter Distribution",
-        "read_recommendations": "Read Recommendations Aloud"
+        "read_recommendations": "Read Recommendations Aloud",
+        "soil_network_header": "Soil Sample Network Analysis",
+        "network_edge_type": "Select Edge Connection Type",
+        "distance_based": "Distance-Based (Geographic Proximity)",
+        "parameter_based": "Soil Parameter Similarity",
+        "distance_threshold": "Distance Threshold (km)",
+        "similarity_threshold": "Similarity Threshold (Euclidean Distance)"
     },
     "sw": {
         "title": "SoilSync AI: Mapendekezo ya Mbolea ya Usahihi kwa Mahindi",
@@ -105,7 +115,13 @@ translations = {
         "feature_importance": "Umuhimu wa Vipengele kwa Utambuzi wa Uzazi wa Udongo",
         "agrodealer_map": "Maeneo ya Wauzaji wa Mbolea",
         "soil_parameter_dist": "Usambazaji wa Vigezo vya Udongo",
-        "read_recommendations": "Soma Mapendekezo kwa Sauti"
+        "read_recommendations": "Soma Mapendekezo kwa Sauti",
+        "soil_network_header": "Uchambuzi wa Mtandao wa Sampuli za Udongo",
+        "network_edge_type": "Chagua Aina ya Muunganisho wa Edge",
+        "distance_based": "Msingi wa Umbali (Ukaribu wa Kijiografia)",
+        "parameter_based": "Ufanano wa Vigezo vya Udongo",
+        "distance_threshold": "Kizingiti cha Umbali (km)",
+        "similarity_threshold": "Kizingiti cha Ufanano (Umbali wa Euclidean)"
     }
 }
 
@@ -130,7 +146,7 @@ def fetch_soil_data(county_name, crop="maize"):
         if "crop" in df_filtered.columns:
             df_filtered["crop"] = df_filtered["crop"].astype(str)
             maize_mask = df_filtered["crop"].str.lower().str.contains(crop.lower(), na=False)
-            df_filtered = df_filtered[maize_mask]
+            df_filtered = df[maize_mask]
         core_params = [
             "soil_pH", "total_Nitrogen_percent_", "phosphorus_Olsen_ppm", "potassium_meq_percent_"
         ]
@@ -215,6 +231,90 @@ def merge_soil_agrodealer_data(soil_df, dealer_df):
     except Exception as e:
         logger.error(f"Merge error: {e}")
         return soil_df
+
+# === FUNCTION TO CREATE SOIL SAMPLE NETWORK ===
+@st.cache_data
+def create_soil_network(soil_data, ward, edge_type="distance", distance_threshold=1.0, similarity_threshold=0.5):
+    if soil_data is None or soil_data.empty:
+        logger.warning("No soil data for network creation")
+        return None
+    ward_data = soil_data[soil_data['Ward'] == ward].copy()
+    if ward_data.empty:
+        logger.warning(f"No soil data for ward: {ward}")
+        return None
+    
+    # Create network graph
+    G = nx.Graph()
+    ward_data = ward_data.reset_index(drop=True)
+    
+    # Add nodes (each node is a soil sample)
+    for idx, row in ward_data.iterrows():
+        G.add_node(idx, label=f"Sample {idx+1}", 
+                   soil_pH=row.get('soil_pH', np.nan),
+                   nitrogen=row.get('total_Nitrogen_percent_', np.nan),
+                   phosphorus=row.get('phosphorus_Olsen_ppm', np.nan),
+                   potassium=row.get('potassium_meq_percent_', np.nan),
+                   latitude=row.get('Latitude', np.nan),
+                   longitude=row.get('Longitude', np.nan))
+    
+    # Add edges based on selected criteria
+    if edge_type == "distance":
+        # Distance-based edges (geographic proximity in km)
+        for i in range(len(ward_data)):
+            for j in range(i + 1, len(ward_data)):
+                lat1, lon1 = ward_data.iloc[i]['Latitude'], ward_data.iloc[i]['Longitude']
+                lat2, lon2 = ward_data.iloc[j]['Latitude'], ward_data.iloc[j]['Longitude']
+                if pd.notnull([lat1, lon1, lat2, lon2]).all():
+                    # Haversine formula for distance (in km)
+                    from math import radians, sin, cos, sqrt, atan2
+                    R = 6371  # Earth's radius in km
+                    dlat = radians(lat2 - lat1)
+                    dlon = radians(lon2 - lon1)
+                    a = sin(dlat/2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon/2)**2
+                    c = 2 * atan2(sqrt(a), sqrt(1-a))
+                    distance = R * c
+                    if distance < distance_threshold:
+                        G.add_edge(i, j, weight=distance)
+    else:
+        # Parameter-based edges (similarity in soil parameters)
+        params = ["soil_pH", "total_Nitrogen_percent_", "phosphorus_Olsen_ppm", "potassium_meq_percent_"]
+        params = [p for p in params if p in ward_data.columns]
+        if not params:
+            logger.warning("No valid parameters for similarity-based network")
+            return None
+        ward_data_params = ward_data[params].fillna(ward_data[params].mean())
+        for i in range(len(ward_data)):
+            for j in range(i + 1, len(ward_data)):
+                vec1 = ward_data_params.iloc[i].values
+                vec2 = ward_data_params.iloc[j].values
+                similarity = euclidean(vec1, vec2)
+                if similarity < similarity_threshold:
+                    G.add_edge(i, j, weight=similarity)
+    
+    # Create interactive visualization with pyvis
+    net = Network(height="500px", width="100%", bgcolor="#222222", font_color="white")
+    net.from_nx(G)
+    
+    # Customize node and edge appearance
+    for node in net.nodes:
+        node["title"] = (f"Sample {node['id']+1}<br>"
+                        f"pH: {G.nodes[node['id']].get('soil_pH', 'N/A'):.2f}<br>"
+                        f"Nitrogen: {G.nodes[node['id']].get('nitrogen', 'N/A'):.2f}%<br>"
+                        f"Phosphorus: {G.nodes[node['id']].get('phosphorus', 'N/A'):.2f} ppm<br>"
+                        f"Potassium: {G.nodes[node['id']].get('potassium', 'N/A'):.2f} meq%")
+        node["color"] = "#636EFA"
+    for edge in net.edges:
+        edge["color"] = "#ffffff"
+        edge["width"] = 1.0 / (edge.get("weight", 1.0) + 0.1) if edge_type == "distance" else 1.0
+    
+    # Save to temporary HTML file
+    html_file = "soil_network.html"
+    net.save_graph(html_file)
+    with open(html_file, "r") as f:
+        html_content = f.read()
+    os.remove(html_file)
+    
+    return html_content
 
 # === TRAIN RANDOM FOREST MODEL ===
 def train_soil_model(soil_data):
@@ -466,7 +566,7 @@ if st.session_state.soil_data is None:
         st.session_state.merged_data = merge_soil_agrodealer_data(st.session_state.soil_data, st.session_state.dealer_data)
         st.session_state.model, st.session_state.scaler, st.session_state.features, st.session_state.model_accuracy = train_soil_model(st.session_state.merged_data)
 
-# Farmer Interface
+# Farmer Interface (Unchanged)
 if user_type == translations["en"]["farmer"]:
     lang = st.sidebar.selectbox(translations["en"]["select_language"], ["English", "Kiswahili"], key="language")
     lang_code = {"English": "en", "Kiswahili": "sw"}[lang]
@@ -636,6 +736,35 @@ elif user_type == translations["en"]["research_institution"]:
             st.plotly_chart(fig, use_container_width=True)
         else:
             st.write("No predictions available due to missing model or data.")
+        
+        st.subheader(translations["en"]["soil_network_header"])
+        edge_type = st.selectbox(
+            translations["en"]["network_edge_type"],
+            [translations["en"]["distance_based"], translations["en"]["parameter_based"]]
+        )
+        if edge_type == translations["en"]["distance_based"]:
+            threshold = st.slider(
+                translations["en"]["distance_threshold"],
+                min_value=0.1, max_value=5.0, value=1.0, step=0.1
+            )
+            html_content = create_soil_network(
+                st.session_state.merged_data, selected_ward,
+                edge_type="distance", distance_threshold=threshold
+            )
+        else:
+            threshold = st.slider(
+                translations["en"]["similarity_threshold"],
+                min_value=0.1, max_value=5.0, value=0.5, step=0.1
+            )
+            html_content = create_soil_network(
+                st.session_state.merged_data, selected_ward,
+                edge_type="parameter", similarity_threshold=threshold
+            )
+        
+        if html_content:
+            components.html(html_content, height=500)
+        else:
+            st.write("No network visualization available due to insufficient data or invalid parameters.")
         
         st.subheader("Agro-Dealer Network")
         if st.session_state.dealer_data is not None:
