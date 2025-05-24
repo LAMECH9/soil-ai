@@ -11,7 +11,8 @@ import json
 from datetime import datetime
 import logging
 import plotly.express as px
-import pyttsx3  # For text-to-speech
+from gtts import gTTS
+import os
 
 # === CONFIGURE ===
 API_TOKEN = "KLRDg3ElBVveVghcN61aScAJevKMgofJF7CWcsVwG2mYt0mUQF63DdB0n6OHqOo9WYCilH7bjJ6s9sIc4zT9zzeCyPXhvytRL4wMAtbV5fRxnAmLFtEI9KXO5tvnu0Pm3rwhAfx5tXGiQOKEm98U2lGTZOIVav2hRtGwsU8SrzUPpZA6CNSNCGkCNp3sndYsrAqeme9xsqFGNEla2PBgjZ0ertc6j8nzCVzUQ8gX2T9hFnR8SoKRA7eyRMHRMDrn"
@@ -253,7 +254,6 @@ def train_soil_model(soil_data):
         X_scaled = scaler.fit_transform(X)
         model = RandomForestClassifier(n_estimators=100, random_state=42)
         model.fit(X_scaled, y)
-        # Compute model accuracy using cross-validation
         scores = cross_val_score(model, X_scaled, y, cv=5, scoring='accuracy')
         accuracy = scores.mean() * 100
         logger.info(f"Model trained successfully with accuracy: {accuracy:.2f}%")
@@ -327,17 +327,15 @@ def estimate_fertilizer_savings(recommendations):
 # === TEXT-TO-SPEECH FUNCTION ===
 def read_recommendations(text, lang="en"):
     try:
-        engine = pyttsx3.init()
-        if lang == "sw":
-            engine.setProperty('voice', 'com.apple.speech.synthesis.voice.samantha')  # Adjust for Kiswahili if available
-        else:
-            engine.setProperty('voice', 'com.apple.speech.synthesis.voice.alex')  # Default English voice
-        engine.setProperty('rate', 150)
-        engine.say(text)
-        engine.runAndWait()
+        tts = gTTS(text=text, lang="sw" if lang == "sw" else "en")
+        audio_file = "recommendations.mp3"
+        tts.save(audio_file)
+        with open(audio_file, "rb") as f:
+            st.audio(f, format="audio/mp3")
+        os.remove(audio_file)
     except Exception as e:
         logger.error(f"Text-to-speech error: {e}")
-        st.warning("Text-to-speech is not available on this server.")
+        st.warning("Text-to-speech is not available. Please ensure you have an active internet connection.")
 
 # === FERTILIZER RECOMMENDATION FUNCTION FOR FARMERS ===
 def get_fertilizer_recommendations_farmer(soil_data, ward, crop_symptoms, lang="en"):
@@ -547,7 +545,6 @@ elif user_type == translations["en"]["research_institution"]:
     st.write("Conduct advanced soil fertility analysis, visualize data, and generate insights for maize farming in Trans Nzoia.")
     
     if st.session_state.merged_data is not None:
-        # Display model accuracy
         if st.session_state.model_accuracy is not None:
             st.write(translations["en"]["model_accuracy"].format(st.session_state.model_accuracy))
         else:
