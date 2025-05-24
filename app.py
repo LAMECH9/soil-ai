@@ -35,14 +35,14 @@ FALLBACK_SOIL_DATA = pd.DataFrame({
 })
 
 FALLBACK_DEALER_DATA = pd.DataFrame({
-    'Ward': ['Kiminini', 'Kwanza'],
-    'agrodealerName': ['AgroVet Kim', 'Kwanza Seeds'],
-    'market': ['Kiminini Market', 'Kwanza Market'],
-    'agrodealerPhone': ['+254712345678', '+254723456789'],
-    'Latitude': [0.78, 0.79],
-    'Longitude': [34.92, 34.93],
-    'County': ['Trans Nzoia', 'Trans Nzoia'],
-    'Constituency': ['Kiminini', 'Kwanza']
+    'Ward': ['Kiminini', 'Kwanza', 'Sirende', 'Chepsiro/Kiptoror', 'Sitatunga', 'Kapomboi'],
+    'agrodealerName': ['AgroVet Kim', 'Kwanza Seeds', 'Sirende Agro', 'Chepsiro Supplies', 'Sitatunga Seeds', 'Kapomboi Agro'],
+    'market': ['Kiminini Market', 'Kwanza Market', 'Sirende Market', 'Chepsiro Market', 'Sitatunga Market', 'Kapomboi Market'],
+    'agrodealerPhone': ['+254712345678', '+254723456789', '+254734567890', '+254745678901', '+254756789012', '+254767890123'],
+    'Latitude': [0.78, 0.79, 0.77, 0.80, 0.78, 0.79],
+    'Longitude': [34.92, 34.93, 34.91, 34.94, 34.92, 34.93],
+    'County': ['Trans Nzoia'] * 6,
+    'Constituency': ['Kiminini', 'Kwanza', 'Kiminini', 'Trans Nzoia East', 'Trans Nzoia East', 'Kwanza']
 })
 
 # === TRANSLATIONS ===
@@ -173,7 +173,10 @@ def merge_soil_agrodealer_data(soil_data, dealer_data):
     try:
         merged_data = soil_data.copy()
         if 'Ward' in dealer_data.columns:
-            dealer_data = dealer_data[['Ward', 'agrodealerName', 'market', 'agrodealerPhone', 'Latitude', 'Longitude']].drop_duplicates()
+            dealer_cols = ['Ward', 'agrodealerName', 'market', 'agrodealerPhone']
+            if 'Latitude' in dealer_data.columns and 'Longitude' in dealer_data.columns:
+                dealer_cols.extend(['Latitude', 'Longitude'])
+            dealer_data = dealer_data[dealer_cols].drop_duplicates()
             merged_data = merged_data.merge(dealer_data, on='Ward', how='left')
         return merged_data
     except Exception as e:
@@ -299,16 +302,19 @@ if user_type == translations["en"]["farmer"]:
                 for _, dealer in dealers.iterrows():
                     st.write(translations[lang_code]["dealer_info"].format(
                         dealer['agrodealerName'], dealer['market'], dealer.get('agrodealerPhone', 'N/A'),
-                        dealer['Latitude'], dealer['Longitude']
+                        dealer.get('Latitude', 0.0), dealer.get('Longitude', 0.0)
                     ))
-                m = folium.Map(location=[dealers['Latitude'].mean(), dealers['Longitude'].mean()], zoom_start=12)
-                for _, dealer in dealers.iterrows():
-                    folium.Marker(
-                        [dealer['Latitude'], dealer['Longitude']],
-                        popup=f"{dealer['agrodealerName']} ({dealer['market']})",
-                        icon=folium.Icon(color="green")
-                    ).add_to(m)
-                st_folium(m, width=700, height=500)
+                if 'Latitude' in dealers.columns and 'Longitude' in dealers.columns:
+                    m = folium.Map(location=[dealers['Latitude'].mean(), dealers['Longitude'].mean()], zoom_start=12)
+                    for _, dealer in dealers.iterrows():
+                        folium.Marker(
+                            [dealer['Latitude'], dealer['Longitude']],
+                            popup=f"{dealer['agrodealerName']} ({dealer['market']})",
+                            icon=folium.Icon(color="green")
+                        ).add_to(m)
+                    st_folium(m, width=700, height=500)
+                else:
+                    st.warning("No geospatial data available for dealers.")
             else:
                 st.write(translations[lang_code]["dealers_none"])
     else:
@@ -321,22 +327,25 @@ if user_type == translations["en"]["research_institution"]:
     if st.session_state.merged_data is not None:
         # Geospatial Soil Analysis
         st.subheader(translations[lang_code]["geospatial_analysis"])
-        soil_data = st.session_state.merged_data.dropna(subset=['Latitude', 'Longitude', 'soil_pH'])
-        if not soil_data.empty:
-            m = folium.Map(location=[soil_data['Latitude'].mean(), soil_data['Longitude'].mean()], zoom_start=10)
-            for _, row in soil_data.iterrows():
-                color = 'green' if row.get('soil_pH', 7.0) >= 5.5 else 'red'
-                folium.CircleMarker(
-                    location=[row['Latitude'], row['Longitude']],
-                    radius=5,
-                    color=color,
-                    fill=True,
-                    fill_color=color,
-                    popup=f"Ward: {row['Ward']}<br>pH: {row.get('soil_pH', 'N/A')}"
-                ).add_to(m)
-            st_folium(m, width=700, height=500)
+        if 'Latitude' in st.session_state.merged_data.columns and 'Longitude' in st.session_state.merged_data.columns:
+            soil_data = st.session_state.merged_data.dropna(subset=['Latitude', 'Longitude', 'soil_pH'])
+            if not soil_data.empty:
+                m = folium.Map(location=[soil_data['Latitude'].mean(), soil_data['Longitude'].mean()], zoom_start=10)
+                for _, row in soil_data.iterrows():
+                    color = 'green' if row.get('soil_pH', 7.0) >= 5.5 else 'red'
+                    folium.CircleMarker(
+                        location=[row['Latitude'], row['Longitude']],
+                        radius=5,
+                        color=color,
+                        fill=True,
+                        fill_color=color,
+                        popup=f"Ward: {row['Ward']}<br>pH: {row.get('soil_pH', 'N/A')}"
+                    ).add_to(m)
+                st_folium(m, width=700, height=500)
+            else:
+                st.warning(translations[lang_code]["no_data"])
         else:
-            st.warning(translations[lang_code]["no_data"])
+            st.warning("No geospatial data available for soil analysis.")
         
         # Soil Statistics
         st.subheader(translations[lang_code]["soil_stats"])
