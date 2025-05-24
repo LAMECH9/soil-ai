@@ -12,17 +12,16 @@ import plotly.express as px
 import json
 from datetime import datetime
 import logging
-import speech_recognition as sr
-from gtts import gTTS
 import os
+from gtts import gTTS
 from fuzzywuzzy import process
 import tempfile
 
 # === CONFIGURE ===
-API_TOKEN = st.secrets.get("API_TOKEN", "KLRDg3ElBVveVghcN61aScAJevKMgofJF7CWcsVwG2mYt0mUQF63DdB0n6OHqOo9WYCilH7bjJ6s9sIc4zT9zzeCyPXhvytRL4wMAtbV5fRxnAmLFtEI9KXO5tvnu0Pm3rwhAfx5tXGiQOKEm98U2lGTZOIVav2hRtGwsU8SrzUPpZA6CNSNCGkCNp3sndYsrAqeme9xsqFGNEla2PBgjZ0ertc6j8nzCVzUQ8gX2T9hFnR8SoKRA7eyRMHRMDrn")
+API_TOKEN = st.secrets.get("API_TOKEN", "")
 SOIL_API_URL = "https://farmerdb.kalro.org/api/SoilData/legacy/county"
 AGRODEALER_API_URL = "https://farmerdb.kalro.org/api/SoilData/agrodealers"
-IS_STREAMLIT_CLOUD = os.getenv("STREAMLIT_CLOUD", False)
+IS_STREAMLIT_CLOUD = os.getenv("STREAMLIT_CLOUD", "true") == "true"
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -77,13 +76,8 @@ translations = {
         "carbon_sequestration_outcome": "Carbon Sequestration: 0.4 tons/ha/year",
         "data_coverage": "Data Coverage Increase: 47% in data-scarce regions",
         "model_performance": "Model Performance Metrics",
-        "voice_input_prompt": "Speak to select an option (e.g., ward or symptom).",
-        "voice_input_error": "Could not understand your speech. Please try again or use manual selection.",
         "read_aloud_button": "Read Recommendations Aloud",
         "voice_output_error": "Text-to-speech not available for this language. Using English as fallback.",
-        "voice_input_language_prompt": "Speak the language name (English, Kiswahili, Luo, Kikuyu).",
-        "voice_input_ward_prompt": "Speak your ward name (e.g., Kiminini, Kwanza).",
-        "voice_input_symptoms_prompt": "Speak the symptoms you observe (e.g., yellowing leaves, stunted growth)."
     },
     "kiswahili": {
         "title": "SoilSync AI: Mapendekezo ya Mbolea ya Usahihi kwa Mahindi",
@@ -132,13 +126,8 @@ translations = {
         "carbon_sequestration_outcome": "Uchukuzi wa Kaboni: 0.4 tani/ha/mwaka",
         "data_coverage": "Ongezeko la Upatikanaji wa Data: 47% katika maeneo yenye uhaba wa data",
         "model_performance": "Vipimo vya Utendaji wa Mfano",
-        "voice_input_prompt": "Sema kuchagua chaguo (k.m., wadi au dalili).",
-        "voice_input_error": "Haikuweza kuelewa hotuba yako. Tafadhali jaribu tena au tumia uchaguzi wa mikono.",
         "read_aloud_button": "Soma Mapendekezo kwa Sauti",
         "voice_output_error": "Hotuba-kwa-montho haipatikani kwa lugha hii. Tumia Kiingereza kama chaguo la kurudi nyuma.",
-        "voice_input_language_prompt": "Sema jina la lugha (Kiingereza, Kiswahili, Luo, Kikuyu).",
-        "voice_input_ward_prompt": "Sema jina la wadi yako (k.m., Kiminini, Kwanza).",
-        "voice_input_symptoms_prompt": "Sema dalili unazoziona (k.m., majani yanageuka manjano, ukuaji umedumaa)."
     },
     "luo": {
         "title": "SoilSync AI: Ber marach marach ne Mbolea mar Puodho Ngano",
@@ -187,13 +176,8 @@ translations = {
         "carbon_sequestration_outcome": "Uchukuzi mar Kaboni: 0.4 tani/ha/mwaka",
         "data_coverage": "Ongezeko mar Upatikanaji mar Data: 47% e maeneo ma nigi uhaba mar data",
         "model_performance": "Vipimo mar Utendaji mar Mfano",
-        "voice_input_prompt": "Wuoy mondo iyier chaguo (kaka ward kata ber marach).",
-        "voice_input_error": "Ok nyal ng'eyo wuoyo mari. Tafadhali tem kendo kata yier gi lwet.",
         "read_aloud_button": "Som Ber marach kwa Sauti",
         "voice_output_error": "Wuoyo-kwa-montho ok nitie ne dho ni. Kaw Kiingereza kaka chaguo marach.",
-        "voice_input_language_prompt": "Wuoy jina mar dho (Kiingereza, Kiswahili, Luo, Kikuyu).",
-        "voice_input_ward_prompt": "Wuoy jina mar ward mari (kaka Kiminini, Kwanza).",
-        "voice_input_symptoms_prompt": "Wuoy ber marach ma ineno (kaka ber marach, dongo motie)."
     },
     "kikuyu": {
         "title": "SoilSync AI: Mapendekezo ya Mbolea ya Usahihi kwa Ngano",
@@ -230,7 +214,9 @@ translations = {
         "fertilizer_savings": "Punguzo la Upotevu wa Mbolea: {:.1f}%",
         "prediction_header": "Utabiri wa Uzazi wa Udongo Katika Wadi",
         "param_stats": "Takwimu za Vigezo vya Udongo",
-        "feature_importance": "Umuhimu wa Kipengele kwa Utabiri wa Uzazi wa Udongo",
+        "feature
+
+_importance": "Umuhimu wa Kipengele kwa Utabiri wa Uzazi wa Udongo",
         "agrodealer_map": "Maeneo ya Wauzaji wa Mbolea",
         "soil_parameter_dist": "Usambazaji wa Vigezo vya Udongo",
         "geospatial_analysis": "Uchambuzi wa Kijiografia wa Udongo Katika Trans Nzoia",
@@ -242,39 +228,10 @@ translations = {
         "carbon_sequestration_outcome": "Uchukuzi wa Kaboni: 0.4 tani/ha/mwaka",
         "data_coverage": "Ongezeko la Upatikanaji wa Data: 47% katika maeneo yenye uhaba wa data",
         "model_performance": "Vipimo vya Utendaji wa Mfano",
-        "voice_input_prompt": "Iga mondo ucagure chaguo (k.m., ward kana mweri wa mweri).",
-        "voice_input_error": "Ndigukinyire kuhota kwega mweri waku. Tafadhali jaribu tena kana cagura gi lwet.",
         "read_aloud_button": "Soma Mweri wa Mweri kwa Sauti",
         "voice_output_error": "Mweri-kwa-montho ndi na rurimi ruri. Tumia Kiingereza kama chaguo cia kurudi nyuma.",
-        "voice_input_language_prompt": "Iga jina ria rurimi (Kiingereza, Kiswahili, Luo, Kikuyu).",
-        "voice_input_ward_prompt": "Iga jina ria ward yaku (k.m., Kiminini, Kwanza).",
-        "voice_input_symptoms_prompt": "Iga mweri wa mweri unahota kwega (k.m., mweri wa manjano, mweri wa kugita)."
     }
 }
-
-# === VOICE INPUT FUNCTION ===
-def capture_voice_input(prompt, lang_code, options=None):
-    if IS_STREAMLIT_CLOUD:
-        return None  # Voice input disabled on Streamlit Cloud
-    recognizer = sr.Recognizer()
-    with sr.Microphone() as source:
-        st.write(prompt)
-        recognizer.adjust_for_ambient_noise(source)
-        try:
-            audio = recognizer.listen(source, timeout=5)
-            lang_map = {"en": "en-US", "kiswahili": "sw-TZ", "luo": "en-US", "kikuyu": "en-US"}
-            text = recognizer.recognize_google(audio, language=lang_map[lang_code])
-            if options:
-                match, score = process.extractOne(text.lower(), [opt.lower() for opt in options])
-                if score > 80:
-                    return [opt for opt in options if opt.lower() == match][0]
-                else:
-                    st.error(translations[lang_code]["voice_input_error"])
-                    return None
-            return text
-        except (sr.UnknownValueError, sr.RequestError, sr.WaitTimeoutError):
-            st.error(translations[lang_code]["voice_input_error"])
-            return None
 
 # === VOICE OUTPUT FUNCTION ===
 def generate_voice_output(text, lang_code):
@@ -408,17 +365,17 @@ def predict_for_all_wards(data, model, scaler, features):
 # === ESTIMATE CARBON SEQUESTRATION ===
 def estimate_carbon_sequestration(data, ward):
     if data is None or ward not in data['Ward'].values:
-        return 0.4  # Default value
+        return 0.4
     ward_data = data[data['Ward'] == ward]
     organic_matter = ward_data.get('organic_matter_percent', pd.Series([2.0])).mean()
-    sequestration_rate = organic_matter * 0.2  # Simplified model
+    sequestration_rate = organic_matter * 0.2
     return max(0.1, min(sequestration_rate, 1.0))
 
 # === ESTIMATE YIELD IMPACT ===
 def estimate_yield_impact(recommendations, ward_data):
     if not recommendations or ward_data.empty:
         return 0.0, 0.0
-    base_yield = 2.0  # tons/ha
+    base_yield = 2.0
     increase = 0.0
     for rec in recommendations:
         if "DAP" in rec or "TSP" in rec:
@@ -435,7 +392,7 @@ def estimate_yield_impact(recommendations, ward_data):
 def estimate_fertilizer_savings(recommendations):
     if not recommendations:
         return 0.0
-    base_usage = 300  # kg/ha
+    base_usage = 300
     optimized_usage = sum([100 if "DAP" in rec or "TSP" in rec else 50 if "Urea" in rec else 0 for rec in recommendations])
     savings = ((base_usage - optimized_usage) / base_usage) * 100
     return max(0, min(savings, 50))
@@ -463,13 +420,13 @@ def get_fertilizer_recommendations_farmer(data, ward, symptoms, lang="en"):
     elif soil_pH > 7.5:
         recommendations.append(translations[lang]["rec_ph_alkaline"].format(soil_pH))
     
-    if nitrogen < 0.2 or "Yellowing leaves" in symptoms or "Majani yanageuka manjano" in symptoms:
+    if nitrogen < 0.2 or any(s in symptoms for s in ["Yellowing leaves", "Majani yanageuka manjano", "Ber marach", "Mweri wa manjano"]):
         recommendations.append(translations[lang]["rec_nitrogen"])
-    if phosphorus < 15 or "Stunted growth" in symptoms or "Ukuaji umedumaa" in symptoms:
+    if phosphorus < 15 or any(s in symptoms for s in ["Stunted growth", "Ukuaji umedumaa", "Dongo motie", "Kugita"]):
         recommendations.append(translations[lang]["rec_phosphorus"])
-    if potassium < 0.2 or "Poor flowering" in symptoms or "Maua hafifu" in symptoms:
+    if potassium < 0.2 or any(s in symptoms for s in ["Poor flowering", "Maua hafifu", "Ber marach", "Maua hafifu"]):
         recommendations.append(translations[lang]["rec_potassium"])
-    if zinc < 1.0 or "Leaf spots" in symptoms or "Madoa kwenye majani" in symptoms:
+    if zinc < 1.0 or any(s in symptoms for s in ["Leaf spots", "Madoa kwenye majani", "Ber marach e yie", "Madoa kwenye mweri"]):
         recommendations.append(translations[lang]["rec_zinc"])
     if boron < 0.5:
         recommendations.append(translations[lang]["rec_boron"])
@@ -588,20 +545,10 @@ if st.session_state.soil_data is None:
 
 # Farmer Interface
 if user_type == translations["en"]["farmer"]:
-    # Language Selection with Voice Input
+    # Language Selection
     lang_options = ["English", "Kiswahili", "Luo", "Kikuyu"]
     lang = st.sidebar.selectbox(translations["en"]["select_language"], lang_options, key="language")
     lang_code = {"English": "en", "Kiswahili": "kiswahili", "Luo": "luo", "Kikuyu": "kikuyu"}[lang]
-    
-    if not IS_STREAMLIT_CLOUD:
-        if st.sidebar.button("Speak Language", key="voice_language"):
-            spoken_lang = capture_voice_input(translations[lang_code]["voice_input_language_prompt"], lang_code, lang_options)
-            if spoken_lang:
-                st.session_state.selected_language = spoken_lang
-                lang = spoken_lang
-                lang_code = {"English": "en", "Kiswahili": "kiswahili", "Luo": "luo", "Kikuyu": "kikuyu"}[lang]
-    else:
-        st.sidebar.warning("Voice input is not supported on this platform. Please use manual selection.")
     
     st.sidebar.write(translations[lang_code]["language_confirmation"])
     
@@ -615,7 +562,7 @@ if user_type == translations["en"]["farmer"]:
     st.header(translations[lang_code]["farmer_header"])
     st.write(translations[lang_code]["farmer_instruction"])
     
-    # Ward Selection with Voice Input
+    # Ward Selection
     required_wards = ["Kiminini", "Sirende", "Chepsiro/Kiptoror", "Sitatunga", "Kapomboi", "Kwanza"]
     data_wards = []
     if st.session_state.merged_data is not None:
@@ -625,14 +572,7 @@ if user_type == translations["en"]["farmer"]:
     wards = sorted(list(set(required_wards + [w.title() for w in data_wards])))
     selected_ward = st.selectbox(translations[lang_code]["select_ward"], wards, key="ward_select")
     
-    if not IS_STREAMLIT_CLOUD:
-        if st.button(translations[lang_code]["voice_input_prompt"] + " (Ward)", key="voice_ward"):
-            spoken_ward = capture_voice_input(translations[lang_code]["voice_input_ward_prompt"], lang_code, wards)
-            if spoken_ward:
-                st.session_state.selected_ward = spoken_ward
-                selected_ward = spoken_ward
-    
-    # Crop Symptoms with Voice Input
+    # Crop Symptoms
     st.subheader(translations[lang_code]["crop_state_header"])
     crop_symptoms = st.multiselect(
         translations[lang_code]["crop_state_header"],
@@ -643,13 +583,6 @@ if user_type == translations["en"]["farmer"]:
              "Cagura yothe ikuhusiana na mweri waku wa ngano." if lang_code == "kikuyu",
         key="symptoms_select"
     )
-    
-    if not IS_STREAMLIT_CLOUD:
-        if st.button(translations[lang_code]["voice_input_prompt"] + " (Symptoms)", key="voice_symptoms"):
-            spoken_symptoms = capture_voice_input(translations[lang_code]["voice_input_symptoms_prompt"], lang_code, translations[lang_code]["crop_symptoms"])
-            if spoken_symptoms:
-                st.session_state.selected_symptoms = [spoken_symptoms] if spoken_symptoms not in st.session_state.selected_symptoms else st.session_state.selected_symptoms
-                crop_symptoms = st.session_state.selected_symptoms
     
     if st.session_state.merged_data is not None:
         recommendations = get_fertilizer_recommendations_farmer(
