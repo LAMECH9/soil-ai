@@ -76,6 +76,9 @@ translations = {
         "model_error": "Model training failed. Using default recommendations.",
         "read_aloud_button": "Read Aloud",
         "voice_output_error": "Text-to-speech unavailable.",
+        "geospatial_analysis": "Geospatial Soil Analysis",
+        "soil_stats": "Soil Statistics",
+        "param_distribution": "Parameter Distribution"
     },
     "kiswahili": {
         "title": "SoilSync AI: Mapendekezo ya Mbolea",
@@ -106,6 +109,9 @@ translations = {
         "model_error": "Mafunzo ya modeli yameshindwa. Tumia mapendekezo ya msingi.",
         "read_aloud_button": "Soma kwa Sauti",
         "voice_output_error": "Hotuba-kwa-montho haipatikani.",
+        "geospatial_analysis": "Uchambuzi wa Kijiografia wa Udongo",
+        "soil_stats": "Takwimu za Udongo",
+        "param_distribution": "Usambazaji wa Vigezo"
     }
 }
 
@@ -313,11 +319,32 @@ if user_type == translations["en"]["research_institution"]:
     st.header(translations[lang_code]["research_institution"])
     
     if st.session_state.merged_data is not None:
-        st.subheader("Soil Statistics")
+        # Geospatial Soil Analysis
+        st.subheader(translations[lang_code]["geospatial_analysis"])
+        soil_data = st.session_state.merged_data.dropna(subset=['Latitude', 'Longitude', 'soil_pH'])
+        if not soil_data.empty:
+            m = folium.Map(location=[soil_data['Latitude'].mean(), soil_data['Longitude'].mean()], zoom_start=10)
+            for _, row in soil_data.iterrows():
+                color = 'green' if row.get('soil_pH', 7.0) >= 5.5 else 'red'
+                folium.CircleMarker(
+                    location=[row['Latitude'], row['Longitude']],
+                    radius=5,
+                    color=color,
+                    fill=True,
+                    fill_color=color,
+                    popup=f"Ward: {row['Ward']}<br>pH: {row.get('soil_pH', 'N/A')}"
+                ).add_to(m)
+            st_folium(m, width=700, height=500)
+        else:
+            st.warning(translations[lang_code]["no_data"])
+        
+        # Soil Statistics
+        st.subheader(translations[lang_code]["soil_stats"])
         stats = st.session_state.merged_data[['soil_pH', 'total_Nitrogen_percent_', 'phosphorus_Olsen_ppm', 'potassium_meq_percent_']].describe()
         st.write(stats)
         
-        st.subheader("Parameter Distribution")
+        # Parameter Distribution
+        st.subheader(translations[lang_code]["param_distribution"])
         param = st.selectbox("Select Parameter", ['soil_pH', 'total_Nitrogen_percent_', 'phosphorus_Olsen_ppm', 'potassium_meq_percent_'])
         if param in st.session_state.merged_data.columns:
             fig = px.histogram(st.session_state.merged_data, x=param, nbins=20, title=f"{param} Distribution")
