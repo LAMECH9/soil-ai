@@ -164,7 +164,7 @@ def train_models(df, features, target_nitrogen, target_phosphorus, user_type="In
             selector = SelectFromModel(rf_selector, prefit=True)
             X_train_n_selected = selector.transform(X_train_n)
             X_test_n_selected = selector.transform(X_test_n)
-            selected_features = X_combined.columns[,sp.get_support()].tolist()
+            selected_features = X_combined.columns[selector.get_support()].tolist()
             param_grid = {
                 'n_estimators': [50, 100],
                 'max_depth': [10, None],
@@ -385,7 +385,6 @@ def generate_user_recommendations(county, ward, crop_type, symptoms, df, scaler,
 
         return sms_output, recommendation
     except Exception as e:
-        st.error(f"Error generating recommendations: {str(e)}")
         return "", translations[language]["recommendations"]["none"]
 
 # Institution-specific recommendation logic
