@@ -365,17 +365,11 @@ def generate_gps(county, ward):
 # User-specific recommendation logic
 def generate_user_recommendations(county, ward, crop_type, symptoms, df, scaler, selector, best_rf_nitrogen, rf_phosphorus, features, feature_columns, language="English"):
     try:
-        # Ensure models and scaler are initialized
-        if best_rf_nitrogen is None or rf_phosphorus is None or scaler is None:
-            raise ValueError("Models or scaler not initialized properly.")
-
-        # Get county-specific data or fallback to mean
         if 'county' in df.columns and county in df['county'].values:
             county_data = df[df['county'] == county][features].mean().to_dict()
         else:
             county_data = df[features].mean().to_dict()
 
-        # Adjust data based on symptoms
         if translations[language]["yellowing_leaves"] in symptoms:
             county_data['total nitrogen'] = max(0, county_data['total nitrogen'] * 0.8)
         if translations[language]["stunted_growth"] in symptoms:
@@ -400,11 +394,8 @@ def generate_user_recommendations(county, ward, crop_type, symptoms, df, scaler,
         })
         X_combined_input = pd.concat([pd.DataFrame(X_scaled, columns=features), additional_data], axis=1)
         X_combined_input = X_combined_input[[col for col in feature_columns if col in X_combined_input.columns]]
-
-        # Use selector only if available
         X_selected = selector.transform(X_scaled) if selector else X_scaled
 
-        # Predict using models
         nitrogen_pred = best_rf_nitrogen.predict(X_selected)[0] if best_rf_nitrogen else 0
         phosphorus_pred = rf_phosphorus.predict(X_combined_input)[0] if rf_phosphorus else 0
         nitrogen_class = translations[language]["low"] if nitrogen_pred == 0 else translations[language]["adequate"] if nitrogen_pred == 1 else translations[language]["high"]
@@ -555,7 +546,7 @@ if user_type == "User" and page == "Farmer Dashboard":
                     st.code(sms_output)
                     st.markdown(f"**{translations[language]['gps_coordinates']}**: Latitude: {lat:.6f}, Longitude: {lon:.6f}")
 
-                    # Visualization (Plotly only, no Chart.js)
+                    # Visualization
                     fig = go.Figure(data=[
                         go.Bar(name='Nitrogen', x=['Status'], y=[1 if nitrogen_class == translations[language]["low"] else 0], marker_color='teal'),
                         go.Bar(name='Phosphorus', x=['Status'], y=[1 if phosphorus_class == translations[language]["low"] else 0], marker_color='orange')
