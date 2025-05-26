@@ -372,7 +372,7 @@ def generate_gps(county, ward):
 def generate_user_recommendations(county, ward, crop_type, symptoms, df, scaler, selector, best_rf_nitrogen, rf_phosphorus, features, feature_columns, language="English"):
     try:
         # Check if required models and data are available
-        if not all([df is not None, scaler is not None, best_rf_nitrogen is not None, rf_phosphorus is not None]):
+        if not all([df is not None, not df.empty, scaler is not None, best_rf_nitrogen is not None, rf_phosphorus is not None]):
             return "", translations[language]["recommendations"]["none"], translations[language]["unknown"], translations[language]["unknown"]
 
         # Prepare input data based on county
@@ -493,7 +493,7 @@ else:
 if user_type == "User":
     try:
         df, features, target_nitrogen, target_phosphorus = load_sample_data()
-        if df is not None and (not st.session_state['user'].get('df') or st.session_state['user']['df'] is None):
+        if df is not None and not df.empty and (not st.session_state['user'].get('df') or st.session_state['user'].get('df') is None or st.session_state['user']['df'].empty):
             (best_rf_nitrogen, rf_phosphorus, scaler, selector, feature_columns, 
              nitrogen_accuracy, phosphorus_accuracy, avg_accuracy, cv_scores, 
              selected_features) = train_models(df, features, target_nitrogen, target_phosphorus, user_type="User")
@@ -515,6 +515,10 @@ if user_type == "User":
                 'roi_season1': [2.4] * 12,
                 'roi_season3': [3.8] * 12
             })
+        else:
+            if df is None or df.empty:
+                st.error("Failed to load data: Dataset is empty or invalid.")
+                st.session_state['user']['df'] = None
     except Exception as e:
         st.error(f"Failed to load data or train models: {str(e)}")
         st.session_state['user']['df'] = None
@@ -527,20 +531,13 @@ if user_type == "User" and page == "Farmer Dashboard":
 
     # Check if required session state variables are initialized
     required_keys = ['df', 'scaler', 'best_rf_nitrogen', 'rf_phosphorus', 'features', 'feature_columns']
-    if not all(key in st.session_state['user'] and st.session_state['user'][key] is not None for key in required_keys):
+    if not all(key in st.session_state['user'] and st.session_state['user'][key] is not None and (key != 'df' or not st.session_state['user']['df'].empty) for key in required_keys):
         st.error(translations[language]["model_error"])
     else:
         with st.form("farmer_input_form"):
-            st.subheader(translations[language]["select_county"])
-            county_options = sorted(st.session_state['user']['df']['county'].unique())
-            county = st.selectbox(translations[language]["select_county"], options=county_options)
-
-            st.subheader(translations[language]["select_ward"])
-            ward_options = county_ward_mapping.get(county, ["Unknown"])
-            ward = st.selectbox(translations[language]["select_ward"], options=ward_options)
-
-            crop_type = st.selectbox(translations[language]["select_crop"], 
-                                     options=["Maize", "Beans", "Potatoes", "Wheat", "Sorghum"])
+            county = st.selectbox(translations[language]["select_county"], options=sorted(st.session_state['user']['df']['county'].unique()))
+            ward = st.selectbox(translations[language]["select_ward"], options=county_ward_mapping.get(county, ["Unknown"]))
+            crop_type = st.selectbox(translations[language]["select_crop"], options=["Maize", "Beans", "Potatoes", "Wheat", "Sorghum"])
             symptoms = st.multiselect(translations[language]["select_symptoms"], 
                                       options=[translations[language]["yellowing_leaves"], 
                                                translations[language]["stunted_growth"], 
