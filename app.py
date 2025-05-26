@@ -11,9 +11,6 @@ from sklearn.feature_selection import SelectFromModel
 import plotly.express as px
 import plotly.graph_objects as go
 import json
-import matplotlib.pyplot as plt
-import seaborn as sns
-from gtts import gTTS
 import io
 import base64
 import requests
@@ -714,9 +711,8 @@ if user_type == "Institution":
                               color_discrete_sequence=['purple'])
                 st.plotly_chart(fig2)
 
-                # Chart.js Configuration
-                ```chartjs
-                {
+                # Chart.js Configuration as Python Dictionary
+                chart_config = {
                     "type": "bar",
                     "data": {
                         "labels": field_trials['county'].tolist(),
@@ -772,3 +768,31 @@ if user_type == "Institution":
                         }
                     }
                 }
+
+                # Display Chart.js Configuration as JSON
+                st.subheader("Chart Configuration")
+                st.json(chart_config)
+
+                # Download Button for Chart.js Configuration
+                st.download_button(
+                    label="Download Chart Config",
+                    data=json.dumps(chart_config, indent=2),
+                    file_name="soilsync_chart.json",
+                    mime="application/json"
+                )
+            except Exception as e:
+                st.error(f"Error generating visualizations: {str(e)}")
+
+# Summary
+st.header("SoilSync AI Summary")
+if 'avg_accuracy' in st.session_state and 'recommendation_accuracy' in st.session_state and 'field_trials' in st.session_state:
+    st.write(f"- **Average Nutrient Prediction Accuracy**: {st.session_state['avg_accuracy']:.2f} (Target: 0.87)")
+    st.write(f"- **Recommendation Accuracy**: {st.session_state['recommendation_accuracy']:.2f} (Target: 0.92)")
+    st.write(f"- **Yield Increase**: {st.session_state['field_trials']['yield_increase'].mean():.2f}% (Range: 15-30%)")
+    st.write(f"- **Fertilizer Reduction**: {st.session_state['field_trials']['fertilizer_reduction'].mean():.2f}% (Target: 22%)")
+    st.write(f"- **Carbon Sequestration**: {st.session_state['field_trials']['carbon_sequestration'].mean():.2f} t/ha/year (Target: 0.4)")
+    st.write(f"- **ROI Season 1**: {st.session_state['field_trials']['roi_season1'].mean():.2f}:1 (Target: 2.4:1)")
+    st.write(f"- **ROI Season 3**: {st.session_state['field_trials']['roi_season3'].mean():.2f}:1 (Target: 3.8:1)")
+    st.write(f"- **Data Coverage Improvement**: 47% (simulated via transfer learning and farmer data)")
+else:
+    st.write("Complete the 'Data Upload & Training' and 'Field Trials' sections to view the summary.")
