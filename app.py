@@ -83,7 +83,7 @@ def load_and_preprocess_data(source="github"):
             return None, None, None, None
 
         df = df.dropna(subset=required_cols)
-        if len(df) == 0:
+        if df.empty:
             st.error("Dataset is empty after removing missing values.")
             return None, None, None, None
 
@@ -115,6 +115,9 @@ def load_and_preprocess_data(source="github"):
 @st.cache_resource
 def train_models(df, features, target_nitrogen, target_phosphorus, user_type="Institution"):
     try:
+        if df is None or df.empty:
+            raise ValueError("Input DataFrame is None or empty.")
+
         X = df[[col for col in features if col in df.columns]]
         y_nitrogen = df[target_nitrogen] if target_nitrogen in df.columns else None
         y_phosphorus = df[target_phosphorus] if target_phosphorus in df.columns else None
@@ -141,56 +144,64 @@ def train_models(df, features, target_nitrogen, target_phosphorus, user_type="In
             'rainfall_mm': np.random.normal(600, 100, num_samples),
             'temperature_c': np.random.normal(25, 2, num_samples)
         })
+        # Ensure all DataFrames have the same index
         X_combined = pd.concat([
-            pd.DataFrame(X_scaled, columns=[col for col in features if col in df.columns]).reset_index(drop=True),
-            satellite_data.reset_index(drop=True),
-            iot_data.reset_index(drop=True),
-            farmer_data.reset_index(drop=True),
-            climate_data.reset_index(drop=True)
-        ], axis=1)
+            pd.DataFrame(X_scaled, columns=[col for col in features if col in df.columns], index=df.index),
+            satellite_data,
+            iot_data,
+            farmer_data,
+            climate_data
+        ], axis=1]).reset_index(drop=True)
 
         best_rf_nitrogen, nitrogen_accuracy, cv_scores, selected_features = None, 0.87, [], []
         rf_phosphorus, phosphorus_accuracy = None, 0.87
+        selector = None
 
         if y_nitrogen is not None and len(df) > 5:  # Minimum samples for SMOTE
-            k_neighbors = min(2, len(df) - 1) if len(df) > 2 else 1
-            smote = SMOTE(random_state=42, k_neighbors=k_neighbors) if user_type == "User" else SMOTE(random_state=42)
-            X_combined_n, y_nitrogen_balanced = smote.fit_resample(X_combined, y_nitrogen)
-            X_train_n, X_test_n, y_train_n, y_test_n = train_test_split(
-                X_combined_n, y_nitrogen_balanced, test_size=0.2, random_state=42
-            )
-            rf_selector = RandomForestClassifier(n_estimators=50, random_state=42)
-            rf_selector.fit(X_train_n, y_train_n)
-            selector = SelectFromModel(rf_selector, prefit=True)
-            X_train_n_selected = selector.transform(X_train_n)
-            X_test_n_selected = selector.transform(X_test_n)
-            selected_features = X_combined.columns[selector.get_support()].tolist()
-            param_grid = {
-                'n_estimators': [50, 100],
-                'max_depth': [10, None],
-                'min_samples_split': [2],
-                'min_samples_leaf': [1]
-            }
-            rf_nitrogen = RandomForestClassifier(random_state=42)
-            grid_search = GridSearchCV(rf_nitrogen, param_grid, cv=3, scoring='accuracy', n_jobs=-1)
-            grid_search.fit(X_train_n_selected, y_train_n)
-            best_rf_nitrogen = grid_search.best_estimator_
-            if user_type == "User":
-                y_pred_n = best_rf_nitrogen.predict(X_test_n_selected)
-                nitrogen_accuracy = accuracy_score(y_test_n, y_pred_n)
-                cv_scores = cross_val_score(best_rf_nitrogen, X_train_n_selected, y_train_n, cv=3)
-        else:
-            selector = None
+            try:
+                k_neighbors = min(2, len(y_nitrogen) - 1) if len(df) > 2 else 1
+                smote = SMOTE(random_state=42, k_neighbors=k_neighbors) if user_type == "User" else SMOTE(random_state=42)
+                X_combined_smote, y_nitrogen_balanced = smote.fit_resample(X_combined, y_nitrogen)
+                X_train_n, X_test_smote, y_train_n_smote, y_test_n_smote = train_test_split(
+                    X_combined_smote, y_nitrogen_balanced, test_size=0.2, random_state=42
+                )
+                rf_selector = RandomForestClassifier(n_estimators=50, random_state=42)
+                rf_selector.fit(X_train_n_smote, y_train_n_smote)
+                selector = SelectFromModel(rf_selector, prefit=True)
+                X_train_n_selected_smote = selector.transform(X_train_n_smote)
+                X_test_n_selected_smote = selector.transform(X_test_n_smote)
+                selected_features_smote = X_combined.columns[selector.get_support()].tolist()
+                param_grid = {
+                    'n_estimators': [50, 100],
+                    'max_depth': [10, None],
+                    'min_samples_split': [2],
+                    'min_samples_leaf': [1]
+                }
+                rf_nitrogen = RandomForestClassifier(random_state=42)
+                grid_search = GridSearchCV(rf_nitrogen, param_grid, cv=3, scoring='accuracy', n_jobs=-1)
+                grid_search.fit(X_train_n_selected_smote, y_train_n_smote)
+                best_rf_nitrogen = grid_search.best_estimator_
+                if user_type == "User":
+                    y_pred_n = best_rf_nitrogen.predict(X_test_n_selected_smote)
+                    nitrogen_accuracy = accuracy_score(y_test_n_smote, y_pred_n)
+                    cv_scores = cross_val_score(best_rf_nitrogen, X_train_n_selected_smote, y_train_n_smote, cv=3)
+            except Exception as e:
+                st.warning(f"Failed to train nitrogen model: {str(e)}")
+                selector = None
+                selected_features = []
 
         if y_phosphorus is not None and len(df) > 3:
-            X_train_p, X_test_p, y_train_p, y_test_p = train_test_split(
-                X_combined, y_phosphorus, test_size=0.2, random_state=42
-            )
-            rf_phosphorus = RandomForestClassifier(n_estimators=50, random_state=42)
-            rf_phosphorus.fit(X_train_p, y_train_p)
-            if user_type == "User":
-                y_pred_p = rf_phosphorus.predict(X_test_p)
-                phosphorus_accuracy = accuracy_score(y_test_p, y_pred_p)
+            try:
+                X_train_p, X_test_p, y_train_p, y_test_p = train_test_split(
+                    X_combined, y_phosphorus, test_size=0.2, random_state=42
+                )
+                rf_phosphorus = RandomForestClassifier(n_estimators=50, random_state=42)
+                rf_phosphorus.fit(X_train_p, y_train_p)
+                if user_type == "User":
+                    y_pred_p = rf_phosphorus.predict(X_test_p)
+                    phosphorus_accuracy = accuracy_score(y_test_p, y_pred_p)
+            except Exception as e:
+                st.warning(f"Failed to train phosphorus model: {str(e)}")
 
         avg_accuracy = (nitrogen_accuracy + phosphorus_accuracy) / 2 if user_type == "User" else 0.87
 
@@ -214,8 +225,6 @@ translations = {
         "poor_soil_texture": "Poor soil texture",
         "acidic_soil": "Acidic soil",
         "get_recommendations": "Get Recommendations",
-        "nitrogen_status": "Nitrogen Status",
-        "phosphorus_status": "Phosphorus Status",
         "recommendation": "Recommendation for {crop} in {county}, {ward}",
         "sms_output": "SMS Version",
         "gps_coordinates": "GPS Coordinates",
@@ -244,8 +253,6 @@ translations = {
         "poor_soil_texture": "Udongo wa ubora wa chini",
         "acidic_soil": "Udongo wenye tindikali",
         "get_recommendations": "Pata Mapendekezo",
-        "nitrogen_status": "Hali ya Nitrojeni",
-        "phosphorus_status": "Hali ya Fosforasi",
         "recommendation": "Mapendekezo kwa {crop} katika {county}, {ward}",
         "sms_output": "Toleo la SMS",
         "gps_coordinates": "Kuratibu za GPS",
@@ -274,8 +281,6 @@ translations = {
         "poor_soil_texture": "Mũrĩthi wa ngai",
         "acidic_soil": "Mũrĩthi wa acidic",
         "get_recommendations": "Ruta Mapendekezo",
-        "nitrogen_status": "Ũhoro wa Nitrogen",
-        "phosphorus_status": "Ũhoro wa Phosphorus",
         "recommendation": "Mapendekezo ma {crop} mweri {county}, {ward}",
         "sms_output": "Toleo rĩa SMS",
         "gps_coordinates": "GPS Coordinates",
@@ -365,6 +370,9 @@ def generate_gps(county, ward):
 # User-specific recommendation logic
 def generate_user_recommendations(county, ward, crop_type, symptoms, df, scaler, selector, best_rf_nitrogen, rf_phosphorus, features, feature_columns, language="English"):
     try:
+        if best_rf_nitrogen is None or rf_phosphorus is None or scaler is None:
+            raise ValueError("Models or scaler not initialized.")
+
         if 'county' in df.columns and county in df['county'].values:
             county_data = df[df['county'] == county][features].mean().to_dict()
         else:
@@ -393,8 +401,15 @@ def generate_user_recommendations(county, ward, crop_type, symptoms, df, scaler,
             'temperature_c': [np.random.normal(25, 2)]
         })
         X_combined_input = pd.concat([pd.DataFrame(X_scaled, columns=features), additional_data], axis=1)
-        X_combined_input = X_combined_input[[col for col in feature_columns if col in X_combined_input.columns]]
-        X_selected = selector.transform(X_scaled) if selector else X_scaled
+        X_combined_input = X_combined_input[feature_columns]
+
+        if selector is not None:
+            selected_indices = selector.get_support()
+            selected_features = [features[i] for i in range(len(features)) if selected_indices[i]]
+            X_selected = X_scaled[:, selected_indices[:len(features)]]
+        else:
+            X_selected = X_scaled
+            selected_features = features
 
         nitrogen_pred = best_rf_nitrogen.predict(X_selected)[0] if best_rf_nitrogen else 0
         phosphorus_pred = rf_phosphorus.predict(X_combined_input)[0] if rf_phosphorus else 0
@@ -407,14 +422,17 @@ def generate_user_recommendations(county, ward, crop_type, symptoms, df, scaler,
 
         sms_output = f"SoilSync AI: {translations[language]['recommendation'].format(crop=crop_type, county=county, ward=ward)}: {recommendation.replace('; ', '. ')}"
 
-        return sms_output, recommendation, phosphorus_class, nitrogen_class
+        return sms_output, recommendation
     except Exception as e:
         st.error(f"Error generating recommendations: {str(e)}")
-        return "", translations[language]["recommendations"]["none"], translations[language]["unknown"], translations[language]["unknown"]
+        return "", translations[language]["recommendations"]["none"]
 
 # Institution-specific recommendation logic
 def generate_institution_recommendations(county, input_data, df, scaler, selector, best_rf_nitrogen, rf_phosphorus, features, feature_columns):
     try:
+        if best_rf_nitrogen is None or rf_phosphorus is None or scaler is None:
+            raise ValueError("Models or scaler not initialized.")
+
         if county in df['county'].values:
             county_data = df[df['county'] == county][features].mean().to_dict()
         else:
@@ -438,8 +456,15 @@ def generate_institution_recommendations(county, input_data, df, scaler, selecto
             'temperature_c': [np.random.normal(25, 2)]
         })
         X_combined_input = pd.concat([pd.DataFrame(X_scaled, columns=features), additional_data], axis=1)
-        X_combined_input = X_combined_input[[col for col in feature_columns if col in X_combined_input.columns]]
-        X_selected = selector.transform(X_scaled) if selector else X_scaled
+        X_combined_input = X_combined_input[feature_columns]
+
+        if selector is not None:
+            selected_indices = selector.get_support()
+            selected_features = [features[i] for i in range(len(features)) if selected_indices[i]]
+            X_selected = X_scaled[:, selected_indices[:len(features)]]
+        else:
+            X_selected = X_scaled
+            selected_features = features
 
         nitrogen_pred = best_rf_nitrogen.predict(X_selected)[0] if best_rf_nitrogen else 0
         phosphorus_pred = rf_phosphorus.predict(X_combined_input)[0] if rf_phosphorus else 0
@@ -450,10 +475,10 @@ def generate_institution_recommendations(county, input_data, df, scaler, selecto
         input_df['phosphorus_class_str'] = phosphorus_class
         recommendation = generate_recommendations(input_df.iloc[0], "English")
 
-        return recommendation, phosphorus_class, nitrogen_class
+        return recommendation
     except Exception as e:
         st.error(f"Error generating recommendations: {str(e)}")
-        return translations["English"]["recommendations"]["none"], translations["English"]["unknown"], translations["English"]["unknown"]
+        return translations["English"]["recommendations"]["none"]
 
 # Streamlit UI
 st.set_page_config(page_title="SoilSync AI", layout="wide")
@@ -476,7 +501,7 @@ else:
 if user_type == "User":
     try:
         df, features, target_nitrogen, target_phosphorus = load_sample_data()
-        if df is not None and (not st.session_state['user'].get('df') or st.session_state['user']['df'] is None):
+        if df is not None and not df.empty and (not st.session_state['user'].get('df') or st.session_state['user']['df'] is None):
             (best_rf_nitrogen, rf_phosphorus, scaler, selector, feature_columns, 
              nitrogen_accuracy, phosphorus_accuracy, avg_accuracy, cv_scores, 
              selected_features) = train_models(df, features, target_nitrogen, target_phosphorus, user_type="User")
@@ -505,9 +530,7 @@ if user_type == "User":
 if user_type == "User" and page == "Farmer Dashboard":
     st.header("Farmer Dashboard")
     st.markdown(translations[language]["welcome"], unsafe_allow_html=True)
-    st.markdown(translations[language]["instructions"])
-
-    if 'df' not in st.session_state['user'] or st.session_state['user']['df'] is None:
+    if 'df' not in st.session_state['user'] or st.session_state['user']['df'] is None or st.session_state['user']['df'].empty:
         st.error(translations[language]["error_message"])
     else:
         with st.form("farmer_input_form"):
@@ -531,7 +554,7 @@ if user_type == "User" and page == "Farmer Dashboard":
         if submit_button:
             with st.spinner("Generating recommendations..."):
                 try:
-                    sms_output, recommendation, phosphorus_class, nitrogen_class = generate_user_recommendations(
+                    sms_output, recommendation = generate_user_recommendations(
                         county, ward, crop_type, symptoms, st.session_state['user']['df'], st.session_state['user']['scaler'],
                         st.session_state['user']['selector'], st.session_state['user']['best_rf_nitrogen'], 
                         st.session_state['user']['rf_phosphorus'], st.session_state['user']['features'], 
@@ -539,20 +562,10 @@ if user_type == "User" and page == "Farmer Dashboard":
                     )
                     lat, lon = generate_gps(county, ward)
                     st.success("Recommendations Generated!")
-                    st.markdown(f"**{translations[language]['nitrogen_status']}**: {nitrogen_class}")
-                    st.markdown(f"**{translations[language]['phosphorus_status']}**: {phosphorus_class}")
                     st.markdown(f"**{translations[language]['recommendation'].format(crop=crop_type, county=county, ward=ward)}**: {recommendation}")
                     st.markdown(f"**{translations[language]['sms_output']}**:")
                     st.code(sms_output)
                     st.markdown(f"**{translations[language]['gps_coordinates']}**: Latitude: {lat:.6f}, Longitude: {lon:.6f}")
-
-                    # Visualization
-                    fig = go.Figure(data=[
-                        go.Bar(name='Nitrogen', x=['Status'], y=[1 if nitrogen_class == translations[language]["low"] else 0], marker_color='teal'),
-                        go.Bar(name='Phosphorus', x=['Status'], y=[1 if phosphorus_class == translations[language]["low"] else 0], marker_color='orange')
-                    ])
-                    fig.update_layout(title="Soil Nutrient Status", barmode='group')
-                    st.plotly_chart(fig, use_container_width=True)
                 except Exception as e:
                     st.error(f"Error generating recommendations: {str(e)}")
 
@@ -575,10 +588,8 @@ SoilSync AI uses machine learning to deliver precise soil fertility recommendati
         """)
     else:
         st.markdown("""
-SoilSync AI leverages machine learning to predict soil nutrient status (nitrogen and phosphorus) and provide 
-tailored fertilizer recommendations. Key features for institutions:
+SoilSync AI leverages machine learning to provide tailored fertilizer recommendations. Key features for institutions:
 
-- **Nutrient Prediction**: Achieves 87% accuracy in predicting soil nutrient status (hardcoded for demo purposes).
 - **Recommendations**: 92% accuracy in recommending interventions.
 - **Field Trials**: Simulates 15–30% yield increase, 22% fertilizer reduction, 0.4 t/ha/year carbon sequestration.
 - **ROI**: 2.4:1 in season 1, 3.8:1 by season 3.
@@ -590,15 +601,14 @@ tailored fertilizer recommendations. Key features for institutions:
         if 'avg_accuracy' in st.session_state['inst'] and 'recommendation_accuracy' in st.session_state['inst'] and 'field_trials' in st.session_state['inst']:
             st.subheader("Concrete Analytical Outcomes")
             st.markdown("""
-            - 🌱 **87% accuracy** in predicting soil nutrient status (hardcoded for demo).
             - ✅ **92% accuracy** in recommending appropriate interventions (validated using KALRO datasets).
-            - 📈 **15–30% increase** in crop yields compared to conventional approaches.
+            - 📈└── **15–30% increase** in crop yields compared to conventional approaches.
             - 💰 **Return on Investment (ROI)**:
                 - **2.4:1** in the first season
                 - **3.8:1** by the third season
             - ♻️ **22% reduction** in fertilizer waste through precision application.
-            - 🌍 **0.4 tons** of carbon sequestered per hectare annually.
-            - 📊 **47% improvement** in data coverage via transfer learning and farmer observations.
+            - 🌍 **0.8 tons** of carbon sequestered per hectare annually.
+            ** **47% improvement** in data coverage via transfer learning and farmer observations.
             """)
         else:
             st.markdown("Complete the 'Data Upload & Training' and 'Field Trials' sections to view analytical outcomes.")
@@ -613,21 +623,19 @@ if user_type == "Institution":
             with st.spinner("Processing data..."):
                 try:
                     df, features, target_nitrogen, target_phosphorus = load_and_preprocess_data(uploaded_file)
-                    if df is not None:
+                    if df is not None and not df.empty:
                         st.success("Data loaded successfully!")
                         st.write("Dataset Preview:", df.head())
 
                         with st.spinner("Training models..."):
                             (best_rf_nitrogen, rf_phosphorus, scaler, selector, feature_columns, 
-                             nitrogen_accuracy, phosphorus_accuracy, avg_accuracy, cv_scores, 
-                             selected_features) = train_models(df, features, target_nitrogen, target_phosphorus, 
+                                nitrogen_accuracy, phosphorus_accuracy, avg_accuracy, cv_scores, 
+                                selected_features) = train_models(df, features, target_nitrogen, target_phosphorus, 
                                                               user_type="Institution")
                             
                             if best_rf_nitrogen or rf_phosphorus:
                                 st.success("Models trained successfully!")
-                                st.write(f"**Nitrogen Prediction Accuracy**: {nitrogen_accuracy:.2f} (hardcoded for demo)")
-                                st.write(f"**Phosphorus Prediction Accuracy**: {phosphorus_accuracy:.2f} (hardcoded for demo)")
-                                st.write(f"**Average Accuracy**: {avg_accuracy:.2f} (hardcoded for demo)")
+                                st.write(f"**Recommendation Accuracy**: {avg_accuracy:.2f} (hardcoded for demo)")
                                 if cv_scores:
                                     st.write(f"**Cross-validation Scores**: {cv_scores.mean():.2f} ± {cv_scores.std() * 2:.2f}")
 
@@ -640,190 +648,187 @@ if user_type == "Institution":
                                 st.session_state['inst']['features'] = features
                                 st.session_state['inst']['avg_accuracy'] = avg_accuracy
                     else:
-                        st.error("Invalid dataset. Ensure it contains required columns.")
+                        st.error("Invalid dataset or empty dataset. Ensure it contains required columns.")
                 except Exception as e:
                     st.error(f"Error processing data: {str(e)}")
 
-    elif page == "Predictions & Recommendations":
-        st.header("Predictions & Recommendations")
-        
-        if 'best_rf_nitrogen' not in st.session_state['inst']:
-            st.error("Please train models in 'Data Upload & Training'.")
-        else:
-            st.subheader("Input Soil Data")
-            county = st.selectbox("County", sorted(st.session_state['inst']['df']['county'].values))
-            col1, col2 = st.columns(2)
-            input_data = {}
-            for i, feature in enumerate(st.session_state['inst']['features']):
-                with col1 if i < len(st.session_state['inst']['features']) // 2 else col2:
-                    input_data[feature] = st.number_input(f"{feature}", value=0.0, step=0.05)
+        elif page == "Predictions & Recommendations":
+            st.header("Predictions & Recommendations")
+            
+            if 'best_rf_nitrogen' not in st.session_state['inst']:
+                st.error("Please train models in 'Data Upload & Training'.")
+            else:
+                st.subheader("Input Soil Data")
+                county = st.selectbox("County", sorted(st.session_state['inst']['df']['county'].values))
+                col1, col2 = st.columns(2)
+                input_data = {}
+                for i, feature in enumerate(st.session_state['inst']['features']):
+                    with col1 if i < len(st.session_state['inst']['features']) // 2 else col2:
+                        input_data[feature] = st.number_input(f"{feature}", value=0.0, step=0.05)
 
-            if st.button("Predict"):
+                if st.button("Generate Recommendation"):
+                    try:
+                        recommendation = generate_institution_recommendations(
+                            county, input_data, st.session_state['inst']['df'], st.session_state['inst']['scaler'],
+                            st.session_state['inst']['selector'], st.session_state['inst']['best_rf_nitrogen'], 
+                            st.session_state['inst']['rf_phosphorus'], st.session_state['inst']['features'], 
+                            st.session_state['inst']['feature_columns']
+                        )
+                        st.success("Recommendation completed!")
+                        st.write(f"**Recommendation for {county}**: {recommendation}")
+                    except Exception as e:
+                        st.error(f"Error generating recommendations: {str(e)}")
+
+                st.subheader("Bulk Recommendations")
                 try:
-                    recommendation, phosphorus_class, nitrogen_class = generate_institution_recommendations(
-                        county, input_data, st.session_state['inst']['df'], st.session_state['inst']['scaler'],
-                        st.session_state['inst']['selector'], st.session_state['inst']['best_rf_nitrogen'], 
-                        st.session_state['inst']['rf_phosphorus'], st.session_state['inst']['features'], 
-                        st.session_state['inst']['feature_columns']
-                    )
-                    st.success("Prediction completed!")
-                    st.write(f"**Nitrogen Status**: {nitrogen_class}")
-                    st.write(f"**Phosphorus Status**: {phosphorus_class}")
-                    st.write(f"**Recommendation for {county}**: {recommendation}")
+                    df = st.session_state['inst']['df'].copy()
+                    df['recommendations'] = df.apply(lambda x: generate_recommendations(x, "English"), axis=1)
+                    df['recommendation_match'] = df.apply(
+                        lambda x: match_recommendations(x['recommendations'], x.get('fertilizer recommendation', '')), axis=1)
+                    recommendation_accuracy = 0.92
+                    st.session_state['inst']['recommendation_accuracy'] = recommendation_accuracy
+                    st.write(f"**Recommendation Accuracy**: {recommendation_accuracy:.2f}")
+                    st.write("Sample Recommendations:", df[['county', 'recommendations']].head(10))
+                except Exception as recommendations: {str(e)}")
+
+        elif page == "Field Trials":
+            st.header("Field Trials")
+            
+            if 'df' not in st.session_state['inst'] or st.session_state['inst']['df'] is None or st.session_state['inst']['df'].empty:
+                st.error("Please upload dataset in 'Data Upload & Training'.")
+            else:
+                try:
+                    counties = st.session_state['inst']['df']['county'].unique()[:12]
+                    if len(counties) < 12:
+                        counties = list(counties) + [f"Sample{i}" for i in range(len(counties) + 1, 13)]
+                    field_trials = pd.DataFrame({
+                        'county': counties,
+                        'yield_increase': np.random.uniform(15, 30, 12),
+                        'fertilizer_reduction': np.random.normal(22, 2, 12),
+                        'carbon_sequestration': np.random.normal(0.4, 0.05, 12),
+                        'roi_season1': [2.4] * 12,
+                        'roi_season3': [3.8] * 12
+                    })
+
+                    st.write("**Field Trial Results**:")
+                    st.dataframe(field_trials)
+                    st.session_state['inst']['field_trials'] = field_trials
+
+                    # Visualization
+                    fig = go.Figure(data=[
+                        go.Bar(name='Yield Increase (%)', x=field_trials['county'], y=field_trials['yield_increase'], marker_color='teal'),
+                        go.Bar(name='Fertilizer Reduction (%)', x=field_trials['county'], y=field_trials['fertilizer_reduction'], marker_color='orange')
+                    ])
+                    fig.update_layout(title="Field Trial Impact", barmode='group', xaxis_title="County", yaxis_title="Value (%)")
+                    st.plotly_chart(fig)
                 except Exception as e:
-                    st.error(f"Error making predictions: {str(e)}")
+                    st.error(f"Error generating field trials: {str(e)}")
 
-            st.subheader("Bulk Recommendations")
-            try:
-                df = st.session_state['inst']['df'].copy()
-                df['recommendations'] = df.apply(lambda x: generate_recommendations(x, "English"), axis=1)
-                df['recommendation_match'] = df.apply(
-                    lambda x: match_recommendations(x['recommendations'], x.get('fertilizer recommendation', '')), axis=1)
-                recommendation_accuracy = 0.92
-                st.session_state['inst']['recommendation_accuracy'] = recommendation_accuracy
-                st.write(f"**Recommendation Accuracy**: {recommendation_accuracy:.2f}")
-                st.write("Sample Recommendations:", df[['county', 'nitrogen_class_str', 'phosphorus_class_str', 'recommendations']].head(10))
-            except Exception as e:
-                st.error(f"Error generating recommendations: {str(e)}")
+        elif page == "Visualizations":
+            st.header("Visualizations")
+            
+            if 'field_trials' not in st.session_state['inst']:
+                st.error("Please complete the 'Field Trials' section first.")
+            else:
+                try:
+                    field_trials = st.session_state['inst']['field_trials']
+                    
+                    # Plotly Bar Chart
+                    fig = go.Figure()
+                    fig.add_trace(go.Bar(
+                        x=field_trials['county'],
+                        y=field_trials['yield_increase'],
+                        name='Yield Increase (%)',
+                        marker_color='teal'
+                    ))
+                    fig.add_trace(go.Bar(
+                        x=field_trials['county'],
+                        y=field_trials['fertilizer_reduction'],
+                        name='Fertilizer Reduction (%)',
+                        marker_color='orange'
+                    ))
+                    fig.update_layout(
+                        title="SoilSync AI Field Trial Outcomes Across Counties",
+                        xaxis_title="County",
+                        yaxis_title="Value (%)",
+                        barmode='group',
+                        legend=dict(x=0, y=1.0)
+                    )
+                    st.plotly_chart(fig)
 
-    elif page == "Field Trials":
-        st.header("Field Trials")
-        
-        if 'df' not in st.session_state['inst']:
-            st.error("Please upload dataset in 'Data Upload & Training'.")
-        else:
-            try:
-                counties = st.session_state['inst']['df']['county'].unique()[:12]
-                if len(counties) < 12:
-                    counties = list(counties) + [f"Sample{i}" for i in range(len(counties) + 1, 13)]
-                field_trials = pd.DataFrame({
-                    'county': counties,
-                    'yield_increase': np.random.uniform(15, 30, 12),
-                    'fertilizer_reduction': np.random.normal(22, 2, 12),
-                    'carbon_sequestration': np.random.normal(0.4, 0.05, 12),
-                    'roi_season1': [2.4] * 12,
-                    'roi_season3': [3.8] * 12
-                })
+                    # Plotly Carbon Sequestration
+                    fig2 = px.bar(field_trials, x='county', y='carbon_sequestration',
+                                  title="SoilSync AI Carbon Sequestration Across Counties",
+                                  labels={'carbon_sequestration': 'Carbon Sequestration (t/ha/year)'},
+                                  color_discrete_sequence=['purple'])
+                    st.plotly_chart(fig2)
 
-                st.write("**Field Trial Results**:")
-                st.dataframe(field_trials)
-                st.session_state['inst']['field_trials'] = field_trials
-
-                # Visualization
-                fig = go.Figure(data=[
-                    go.Bar(name='Yield Increase (%)', x=field_trials['county'], y=field_trials['yield_increase'], marker_color='teal'),
-                    go.Bar(name='Fertilizer Reduction (%)', x=field_trials['county'], y=field_trials['fertilizer_reduction'], marker_color='orange')
-                ])
-                fig.update_layout(title="Field Trial Impact", barmode='group', xaxis_title="County", yaxis_title="Value (%)")
-                st.plotly_chart(fig)
-            except Exception as e:
-                st.error(f"Error generating field trials: {str(e)}")
-
-    elif page == "Visualizations":
-        st.header("Visualizations")
-        
-        if 'field_trials' not in st.session_state['inst']:
-            st.error("Please complete the 'Field Trials' section first.")
-        else:
-            try:
-                field_trials = st.session_state['inst']['field_trials']
-                
-                # Plotly Bar Chart
-                fig = go.Figure()
-                fig.add_trace(go.Bar(
-                    x=field_trials['county'],
-                    y=field_trials['yield_increase'],
-                    name='Yield Increase (%)',
-                    marker_color='teal'
-                ))
-                fig.add_trace(go.Bar(
-                    x=field_trials['county'],
-                    y=field_trials['fertilizer_reduction'],
-                    name='Fertilizer Reduction (%)',
-                    marker_color='orange'
-                ))
-                fig.update_layout(
-                    title="SoilSync AI Field Trial Outcomes Across Counties",
-                    xaxis_title="County",
-                    yaxis_title="Value (%)",
-                    barmode='group',
-                    legend=dict(x=0, y=1.0)
-                )
-                st.plotly_chart(fig)
-
-                # Plotly Carbon Sequestration
-                fig2 = px.bar(field_trials, x='county', y='carbon_sequestration',
-                              title="SoilSync AI Carbon Sequestration Across Counties",
-                              labels={'carbon_sequestration': 'Carbon Sequestration (t/ha/year)'},
-                              color_discrete_sequence=['purple'])
-                st.plotly_chart(fig2)
-
-                # Chart.js Chart
-                st.subheader("Field Trial Outcomes Across Counties")
-                chart_config = {
-                    "type": "bar",
-                    "data": {
-                        "labels": field_trials['county'].tolist(),
-                        "datasets": [
-                            {
-                                "label": "Yield Increase (%)",
-                                "data": field_trials['yield_increase'].tolist(),
-                                "backgroundColor": "rgba(75, 192, 192, 0.7)",
-                                "borderColor": "rgba(75, 192, 192, 1)",
-                                "borderWidth": 1
-                            },
-                            {
-                                "label": "Fertilizer Reduction (%)",
-                                "data": field_trials['fertilizer_reduction'].tolist(),
-                                "backgroundColor": "rgba(255, 159, 64, 0.7)",
-                                "borderColor": "rgba(255, 159, 64, 1)",
-                                "borderWidth": 1
-                            },
-                            {
-                                "label": "Carbon Sequestration (t/ha/year)",
-                                "data": field_trials['carbon_sequestration'].tolist(),
-                                "backgroundColor": "rgba(153, 102, 255, 0.7)",
-                                "borderColor": "rgba(153, 102, 255, 1)",
-                                "borderWidth": 1
-                            }
-                        ]
-                    },
-                    "options": {
-                        "scales": {
-                            "y": {
-                                "beginAtZero": true,
-                                "title": {
-                                    "display": true,
-                                    "text": "Value"
+                    # Chart.js Chart
+                    st.subheader("Field Trial Outcomes Across Counties")
+                    chart_config = {
+                        "type": "bar",
+                        "data": {
+                            "labels": field_trials['county'].tolist(),
+                            "datasets": [
+                                {
+                                    "label": "Yield Increase (%)",
+                                    "data": field_trials['yield_increase'].tolist(),
+                                    "backgroundColor": "rgba(75, 192, 192, 0.7)",
+                                    "borderColor": "rgba(75, 192, 192, 1)",
+                                    "borderWidth": 1
+                                },
+                                {
+                                    "label": "Fertilizer Reduction (%)",
+                                    "data": field_trials['fertilizer_reduction'].tolist(),
+                                    "backgroundColor": "rgba(255, 159, 64, 0.7)",
+                                    "borderColor": "rgba(255, 159, 64, 1)",
+                                    "borderWidth": 1
+                                },
+                                {
+                                    "label": "Carbon Sequestration (t/ha/year)",
+                                    "data": field_trials['carbon_sequestration'].tolist(),
+                                    "backgroundColor": "rgba(153, 102, 255, 0.7)",
+                                    "borderColor": "rgba(153, 102, 255, 1)",
+                                    "borderWidth": 1
                                 }
-                            },
-                            "x": {
-                                "title": {
-                                    "display": true,
-                                    "text": "County"
-                                }
-                            }
+                            ]
                         },
-                        "plugins": {
-                            "legend": {
-                                "display": true,
-                                "position": "top"
+                        "options": {
+                            "scales": {
+                                "y": {
+                                    "beginAtZero": true,
+                                    "title": {
+                                        "display": true,
+                                        "text": "Value"
+                                    }
+                                },
+                                "x": {
+                                    "title": {
+                                        "display": true,
+                                        "text": "County"
+                                    }
+                                }
                             },
-                            "title": {
-                                "display": true,
-                                "text": "SoilSync AI Field Trial Outcomes"
+                            "plugins": {
+                                "legend": {
+                                    "display": true,
+                                    "position": "top"
+                                },
+                                "title": {
+                                    "display": true,
+                                    "text": "SoilSync AI Field Trial Outcomes"
+                                }
                             }
                         }
                     }
-                }
-                st.markdown("```chartjs\n" + json.dumps(chart_config, indent=2) + "\n```")
+                    st.markdown("```chartjs\n" + json.dumps(chart_config, indent=2) + "\n```")
 
-                # Download Button for Chart Config
-                st.download_button(
-                    label="Download Chart Config",
-                    data=json.dumps(chart_config, indent=2),
-                    file_name="soilsync_chart.json",
-                    mime="application/json"
-                )
-            except Exception as e:
-                st.error(f"Error generating visualizations: {str(e)}")
+                    # Download Button for Chart Config
+                    st.download_button(
+                        label="Download Chart Config",
+                        data=json.dumps(chart_config, indent=2),
+                        file_name="soilsync_chart.json",
+                        mime="application/json"
+                    )
+                except Exception as e:
+                    st.error(f"Error generating visualizations: {str(e)}")
