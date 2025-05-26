@@ -7,8 +7,6 @@ from sklearn.metrics import accuracy_score
 from sklearn.preprocessing import StandardScaler
 from imblearn.over_sampling import SMOTE
 from sklearn.feature_selection import SelectFromModel
-import plotly.express as px
-import plotly.graph_objects as go
 import json
 import io
 import requests
@@ -23,26 +21,26 @@ if 'user' not in st.session_state:
 if 'inst' not in st.session_state:
     st.session_state['inst'] = {}
 
-# Embedded cleaned dataset for user interface
+# Embedded cleaned dataset for user interface (manageable for investor pitch)
 @st.cache_data
 def load_embedded_data():
     try:
         data = {
-            'county': ["Kajiado", "Narok", "Nakuru", "Kiambu", "Machakos", "Murang'a", "Nyeri", "Kitui", "Embu", "Meru", "Tharaka Nithi", "Laikipia"],
-            'soil ph': [5.2, 6.1, 5.8, 6.0, 5.5, 5.7, 6.2, 5.3, 5.9, 6.0, 5.6, 5.4],
-            'total nitrogen': [0.15, 0.22, 0.18, 0.25, 0.19, 0.21, 0.23, 0.16, 0.20, 0.24, 0.17, 0.18],
-            'phosphorus olsen': [12, 15, 10, 18, 14, 13, 16, 11, 15, 17, 12, 13],
-            'potassium meq': [1.2, 1.5, 1.3, 1.4, 1.1, 1.3, 1.5, 1.2, 1.4, 1.6, 1.3, 1.2],
-            'calcium meq': [3.5, 4.0, 3.8, 4.2, 3.6, 3.9, 4.1, 3.4, 3.8, 4.0, 3.7, 3.5],
-            'magnesium meq': [0.8, 0.9, 0.7, 1.0, 0.8, 0.9, 1.1, 0.7, 0.9, 1.0, 0.8, 0.7],
-            'manganese meq': [0.05, 0.06, 0.04, 0.07, 0.05, 0.06, 0.08, 0.04, 0.06, 0.07, 0.05, 0.04],
-            'copper': [0.02, 0.03, 0.02, 0.04, 0.03, 0.02, 0.03, 0.02, 0.03, 0.04, 0.02, 0.03],
-            'iron': [0.5, 0.6, 0.4, 0.7, 0.5, 0.6, 0.8, 0.4, 0.6, 0.7, 0.5, 0.4],
-            'zinc': [0.03, 0.04, 0.03, 0.05, 0.04, 0.03, 0.04, 0.03, 0.04, 0.05, 0.03, 0.04],
-            'sodium meq': [0.1, 0.2, 0.1, 0.3, 0.2, 0.1, 0.2, 0.1, 0.2, 0.3, 0.1, 0.2],
-            'total org carbon': [1.8, 2.2, 1.9, 2.5, 2.0, 2.1, 2.3, 1.7, 2.0, 2.4, 1.9, 1.8],
-            'total nitrogenclass': ['low', 'adequate', 'low', 'adequate', 'low', 'adequate', 'adequate', 'low', 'adequate', 'adequate', 'low', 'low'],
-            'phosphorus olsen class': ['low', 'adequate', 'low', 'adequate', 'low', 'adequate', 'adequate', 'low', 'adequate', 'adequate', 'low', 'low']
+            'county': ["Kajiado", "Narok", "Nakuru", "Kiambu", "Machakos", "Nyeri", "Kitui", "Meru"],
+            'soil ph': [5.2, 6.1, 5.8, 6.0, 5.5, 6.2, 5.3, 5.9],
+            'total nitrogen': [0.15, 0.22, 0.18, 0.25, 0.19, 0.23, 0.16, 0.20],
+            'phosphorus olsen': [12, 15, 10, 18, 14, 16, 11, 15],
+            'potassium meq': [1.2, 1.5, 1.3, 1.4, 1.1, 1.5, 1.2, 1.4],
+            'calcium meq': [3.5, 4.0, 3.8, 4.2, 3.6, 4.1, 3.4, 3.8],
+            'magnesium meq': [0.8, 0.9, 0.7, 1.0, 0.8, 1.1, 0.7, 0.9],
+            'manganese meq': [0.05, 0.06, 0.04, 0.07, 0.05, 0.08, 0.04, 0.06],
+            'copper': [0.02, 0.03, 0.02, 0.04, 0.03, 0.03, 0.02, 0.03],
+            'iron': [0.5, 0.6, 0.4, 0.7, 0.5, 0.8, 0.4, 0.6],
+            'zinc': [0.03, 0.04, 0.03, 0.05, 0.04, 0.04, 0.03, 0.04],
+            'sodium meq': [0.1, 0.2, 0.1, 0.3, 0.2, 0.2, 0.1, 0.2],
+            'total org carbon': [1.8, 2.2, 1.9, 2.5, 2.0, 2.3, 1.7, 2.0],
+            'total nitrogenclass': ['low', 'adequate', 'low', 'adequate', 'low', 'adequate', 'low', 'adequate'],
+            'phosphorus olsen class': ['low', 'adequate', 'low', 'adequate', 'low', 'adequate', 'low', 'adequate']
         }
         df = pd.DataFrame(data)
         features = ['soil ph', 'total nitrogen', 'phosphorus olsen', 'potassium meq', 
@@ -102,8 +100,7 @@ def load_and_preprocess_data(source="github"):
         if 'county' not in df.columns:
             df['county'] = [f"County{i+1}" for i in range(len(df))]
 
-        kenyan_counties = ["Kajiado", "Narok", "Nakuru", "Kiambu", "Machakos", "Murang'a", 
-                           "Nyeri", "Kitui", "Embu", "Meru", "Tharaka Nithi", "Laikipia"]
+        kenyan_counties = ["Kajiado", "Narok", "Nakuru", "Kiambu", "Machakos", "Nyeri", "Kitui", "Meru"]
         if df['county'].str.contains("County").any():
             county_mapping = {f"County{i+1}": kenyan_counties[i % len(kenyan_counties)] for i in range(len(df))}
             df['county'] = df['county'].map(county_mapping).fillna(df['county'])
@@ -134,11 +131,11 @@ def train_models(df, features, target_nitrogen, target_phosphorus, user_type="In
             'salinity_ec': df['sodium meq'].values * 0.1 + np.random.normal(0, 0.05, num_samples) if 'sodium meq' in df.columns else np.random.normal(0.5, 0.1, num_samples)
         })
         farmer_data = pd.DataFrame({
-    'crop_stress': np.random.choice([0, 1], size=num_samples, p=[0.7, 0.3]),
-    'yellowing_leaves': np.where(df['total nitrogen'].values < 0.2, 
-                                 np.random.choice([0, 1], size=num_samples, p=[0.4, 0.6]), 
-                                 np.random.choice([0, 1], size=num_samples, p=[0.9, 0.1])) if 'total nitrogen' in df.columns else np.random.choice([0, 1], size=num_samples, p=[0.9, 0.1])
-})
+            'crop_stress': np.random.choice([0, 1], size=num_samples, p=[0.7, 0.3]),
+            'yellowing_leaves': np.where(df['total nitrogen'].values < 0.2, 
+                                         np.random.choice([0, 1], size=num_samples, p=[0.4, 0.6]), 
+                                         np.random.choice([0, 1], size=num_samples, p=[0.9, 0.1])) if 'total nitrogen' in df.columns else np.random.choice([0, 1], size=num_samples, p=[0.9, 0.1])
+        })
         climate_data = pd.DataFrame({
             'rainfall_mm': np.random.normal(600, 100, num_samples),
             'temperature_c': np.random.normal(25, 2, num_samples)
@@ -298,18 +295,14 @@ translations = {
 
 # County to ward mapping
 county_ward_mapping = {
-    "Kajiado": ["Isinya", "Kajiado Central", "Ngong", "Loitokitok"],
-    "Narok": ["Narok North", "Narok South", "Olokurto", "Melili"],
-    "Nakuru": ["Nakuru East", "Nakuru West", "Rongai", "Molo"],
-    "Kiambu": ["Kiambaa", "Kikuyu", "Limuru", "Thika"],
-    "Machakos": ["Machakos Town", "Mavoko", "Kangundo", "Matungulu"],
-    "Murang'a": ["Kigumo", "Kangema", "Mathioya", "Murang'a South"],
-    "Nyeri": ["Mathira", "Kieni", "Othaya", "Nyeri Town"],
-    "Kitui": ["Kitui Central", "Kitui West", "Mwingi North", "Mwingi West"],
-    "Embu": ["Manyatta", "Runyenjes", "Mbeere South", "Mbeere North"],
-    "Meru": ["Imenti Central", "Imenti North", "Tigania East", "Tigania West"],
-    "Tharaka Nithi": ["Chuka", "Tharaka", "Igambang'ombe", "Maara"],
-    "Laikipia": ["Laikipia West", "Laikipia East", "Nanyuki", "Nyahururu"]
+    "Kajiado": ["Isinya", "Kajiado Central", "Ngong"],
+    "Narok": ["Narok North", "Narok South"],
+    "Nakuru": ["Nakuru East", "Nakuru West"],
+    "Kiambu": ["Kiambaa", "Kikuyu"],
+    "Machakos": ["Machakos Town", "Mavoko"],
+    "Nyeri": ["Mathira", "Kieni"],
+    "Kitui": ["Kitui Central", "Kitui West"],
+    "Meru": ["Imenti Central", "Imenti North"]
 }
 
 # Generate recommendations
@@ -351,13 +344,20 @@ def generate_gps(county, ward):
         ("Kajiado", "Isinya"): {"lat": (-1.9, -1.7), "lon": (36.7, 36.9)},
         ("Kajiado", "Kajiado Central"): {"lat": (-1.8, -1.6), "lon": (36.8, 37.0)},
         ("Kajiado", "Ngong"): {"lat": (-1.4, -1.2), "lon": (36.6, 36.8)},
-        ("Kajiado", "Loitokitok"): {"lat": (-2.8, -2.6), "lon": (37.3, 37.5)},
         ("Narok", "Narok North"): {"lat": (-1.0, -0.8), "lon": (35.7, 35.9)},
         ("Narok", "Narok South"): {"lat": (-1.5, -1.3), "lon": (35.6, 35.8)},
         ("Nakuru", "Nakuru East"): {"lat": (-0.3, -0.1), "lon": (36.1, 36.3)},
+        ("Nakuru", "Nakuru West"): {"lat": (-0.4, -0.2), "lon": (36.0, 36.2)},
         ("Kiambu", "Kiambaa"): {"lat": (-1.1, -0.9), "lon": (36.7, 36.9)},
-        ("Murang'a", "Kigumo"): {"lat": (-0.8, -0.6), "lon": (37.0, 37.2)},
-        ("Nyeri", "Mathira"): {"lat": (-0.4, -0.2), "lon": (37.0, 37.2)}
+        ("Kiambu", "Kikuyu"): {"lat": (-1.3, -1.1), "lon": (36.6, 36.8)},
+        ("Machakos", "Machakos Town"): {"lat": (-1.5, -1.3), "lon": (37.2, 37.4)},
+        ("Machakos", "Mavoko"): {"lat": (-1.4, -1.2), "lon": (36.9, 37.1)},
+        ("Nyeri", "Mathira"): {"lat": (-0.4, -0.2), "lon": (37.0, 37.2)},
+        ("Nyeri", "Kieni"): {"lat": (-0.5, -0.3), "lon": (36.9, 37.1)},
+        ("Kitui", "Kitui Central"): {"lat": (-1.4, -1.2), "lon": (38.0, 38.2)},
+        ("Kitui", "Kitui West"): {"lat": (-1.5, -1.3), "lon": (37.9, 38.1)},
+        ("Meru", "Imenti Central"): {"lat": (0.0, 0.2), "lon": (37.6, 37.8)},
+        ("Meru", "Imenti North"): {"lat": (0.1, 0.3), "lon": (37.5, 37.7)}
     }
     ranges = ward_gps_ranges.get((county, ward), {"lat": (-1.0, 1.0), "lon": (36.0, 38.0)})
     lat = np.random.uniform(ranges["lat"][0], ranges["lat"][1])
@@ -394,9 +394,19 @@ def generate_user_recommendations(county, ward, crop_type, symptoms, df, scaler,
             'rainfall_mm': [np.random.normal(600, 100)],
             'temperature_c': [np.random.normal(25, 2)]
         })
-        X_combined_input = pd.concat([pd.DataFrame(X_scaled, columns=features), additional_data], axis=1)
-        X_combined_input = X_combined_input[feature_columns]
+
+        # Ensure X_combined_input has the same columns as feature_columns
+        X_scaled_df = pd.DataFrame(X_scaled, columns=features)
+        X_combined_input = pd.concat([X_scaled_df, additional_data], axis=1)
         
+        # Verify column alignment
+        missing_cols = [col for col in feature_columns if col not in X_combined_input.columns]
+        if missing_cols or len(X_combined_input.columns) != len(feature_columns):
+            raise ValueError("Mismatch in input data dimensions. Please ensure all required soil features are provided or contact support.")
+
+        # Reorder columns to match feature_columns
+        X_combined_input = X_combined_input[feature_columns]
+
         if best_rf_nitrogen and selector:
             X_selected = selector.transform(X_scaled)
             nitrogen_pred = best_rf_nitrogen.predict(X_selected)[0]
@@ -417,8 +427,11 @@ def generate_user_recommendations(county, ward, crop_type, symptoms, df, scaler,
         sms_output = f"SoilSync AI: {translations[language]['recommendation'].format(crop=crop_type, county=county, ward=ward)}: {recommendation.replace('; ', '. ')}"
 
         return sms_output, recommendation, phosphorus_class, nitrogen_class
+    except ValueError as ve:
+        st.error(str(ve))
+        return "", translations[language]["recommendations"]["none"], translations[language]["unknown"], translations[language]["unknown"]
     except Exception as e:
-        st.error(f"Error generating recommendations: {str(e)}")
+        st.error(f"Error generating recommendations: {str(e)}. Please try again or contact support.")
         return "", translations[language]["recommendations"]["none"], translations[language]["unknown"], translations[language]["unknown"]
 
 # Institution-specific recommendation logic
@@ -531,7 +544,7 @@ if user_type == "User" and page == "Farmer Dashboard":
             ward = st.selectbox(translations[language]["select_ward"], options=ward_options)
 
             crop_type = st.selectbox(translations[language]["select_crop"], 
-                                     options=["Maize", "Beans", "Potatoes", "Wheat", "Sorghum"])
+                                     options=["Maize", "Beans", "Potatoes"])
             symptoms = st.multiselect(translations[language]["select_symptoms"], 
                                       options=[translations[language]["yellowing_leaves"], 
                                                translations[language]["stunted_growth"], 
@@ -556,16 +569,8 @@ if user_type == "User" and page == "Farmer Dashboard":
                     st.markdown(f"**{translations[language]['sms_output']}**:")
                     st.code(sms_output)
                     st.markdown(f"**{translations[language]['gps_coordinates']}**: Latitude: {lat:.6f}, Longitude: {lon:.6f}")
-
-                    # Visualization
-                    fig = go.Figure(data=[
-                        go.Bar(name='Nitrogen', x=['Status'], y=[1 if nitrogen_class == translations[language]["low"] else 0], marker_color='teal'),
-                        go.Bar(name='Phosphorus', x=['Status'], y=[1 if phosphorus_class == translations[language]["low"] else 0], marker_color='orange')
-                    ])
-                    fig.update_layout(title="Soil Nutrient Status", barmode='group')
-                    st.plotly_chart(fig, use_container_width=True)
                 except Exception as e:
-                    st.error(f"Error generating recommendations: {str(e)}")
+                    st.error(f"Error generating recommendations: {str(e)}. Please try again or contact support.")
 
 # Home page
 if page == "Home":
@@ -578,7 +583,7 @@ SoilSync AI uses machine learning to deliver precise soil fertility recommendati
 - **Proven Impact**: Up to 30% yield increase and 22% fertilizer reduction in field trials.
 - **High Accuracy**: 92% recommendation accuracy, validated with KALRO data.
 - **Sustainability**: 0.4 t/ha/year carbon sequestration.
-- **Scalability**: Supports 12 counties, expandable to all of Kenya.
+- **Scalability**: Supports multiple counties, expandable across Kenya.
 - **ROI**: 2.4:1 in season 1, 3.8:1 by season 3.
 
 **Target Market**: Smallholder farmers in Kenya.
@@ -704,16 +709,16 @@ if user_type == "Institution":
             st.error("Please upload dataset in 'Data Upload & Training'.")
         else:
             try:
-                counties = st.session_state['inst']['df']['county'].unique()[:12]
-                if len(counties) < 12:
-                    counties = list(counties) + [f"Sample{i}" for i in range(len(counties) + 1, 13)]
+                counties = st.session_state['inst']['df']['county'].unique()[:8]
+                if len(counties) < 8:
+                    counties = list(counties) + [f"Sample{i}" for i in range(len(counties) + 1, 9)]
                 field_trials = pd.DataFrame({
                     'county': counties,
-                    'yield_increase': np.random.uniform(15, 30, 12),
-                    'fertilizer_reduction': np.random.normal(22, 2, 12),
-                    'carbon_sequestration': np.random.normal(0.4, 0.05, 12),
-                    'roi_season1': [2.4] * 12,
-                    'roi_season3': [3.8] * 12
+                    'yield_increase': np.random.uniform(15, 30, 8),
+                    'fertilizer_reduction': np.random.normal(22, 2, 8),
+                    'carbon_sequestration': np.random.normal(0.4, 0.05, 8),
+                    'roi_season1': [2.4] * 8,
+                    'roi_season3': [3.8] * 8
                 })
 
                 st.write("**Field Trial Results**:")
@@ -811,7 +816,7 @@ if user_type == "Institution":
                             "x": {
                                 "title": {
                                     "display": True,
-                                    "text": "County"
+                                    "text": "Country"
                                 }
                             }
                         },
