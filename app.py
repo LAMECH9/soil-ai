@@ -521,6 +521,35 @@ tailored fertilizer recommendations. Key features:
 - **ROI**: 2.4:1 in season 1, 3.8:1 in season 3.
 - **Data Coverage**: 47% improvement via transfer learning and farmer observations.
         """)
+        st.header("Concrete Analytical Outcomes")
+        if 'avg_accuracy' in st.session_state and 'recommendation_accuracy' in st.session_state and 'field_trials' in st.session_state:
+            st.subheader("Model Performance")
+            st.markdown("""
+            - 🌱 **87% accuracy** in predicting soil nutrient status.
+            - ✅ **92% accuracy** in recommending appropriate interventions (validated using KALRO datasets).
+            """)
+            
+            st.subheader("Field Trial Results (12 Counties)")
+            st.markdown("""
+            - 📈 **15–30% increase** in crop yields compared to conventional approaches.
+            - 💰 **Return on investment (ROI)** of:
+              - **2.4:1** in the first season
+              - **3.8:1** by the third season
+            """)
+            
+            st.subheader("Efficiency Gains")
+            st.markdown("""
+            - ♻️ **22% reduction** in fertilizer waste through precision input application.
+            - 🌍 **Measurable increase in soil organic carbon**:
+              - **0.4 tons** of carbon sequestered per hectare annually
+            """)
+            
+            st.subheader("Data Coverage Expansion")
+            st.markdown("""
+            - 📊 **47% improvement** in data coverage for previously data-scarce regions through transfer learning and integration of farmer observations.
+            """)
+        else:
+            st.markdown("Complete the **Data Upload & Training** and **Field Trials** sections to view the analytical outcomes.")
 
 # Institution Interface
 if user_type == "Institution":
@@ -763,63 +792,3 @@ if user_type == "Institution":
                 )
             except Exception as e:
                 st.error(f"Error generating visualizations: {str(e)}")
-
-# Summary
-if user_type == "User":
-    st.header("Concrete Analytical Outcomes")
-    if 'avg_accuracy' in st.session_state and 'recommendation_accuracy' in st.session_state and 'field_trials' in st.session_state:
-        st.subheader("Model Performance")
-        st.markdown("""
-        - 🌱 **87% accuracy** in predicting soil nutrient status.
-        - ✅ **92% accuracy** in recommending appropriate interventions (validated using KALRO datasets).
-        """)
-        
-        st.subheader("Field Trial Results (12 Counties)")
-        st.markdown("""
-        - 📈 **15–30% increase** in crop yields compared to conventional approaches.
-        - 💰 **Return on investment (ROI)** of:
-          - **2.4:1** in the first season
-          - **3.8:1** by the third season
-        """)
-        
-        st.subheader("Efficiency Gains")
-        st.markdown("""
-        - ♻️ **22% reduction** in fertilizer waste through precision input application.
-        - 🌍 **Measurable increase in soil organic carbon**:
-          - **0.4 tons** of carbon sequestered per hectare annually
-        """)
-        
-        st.subheader("Data Coverage Expansion")
-        st.markdown("""
-        - 📊 **47% improvement** in data coverage for previously data-scarce regions through transfer learning and integration of farmer observations.
-        """)
-elif user_type == "Institution":
-    st.header("Concrete Analytical Outcomes")
-    if 'avg_accuracy' in st.session_state and 'recommendation_accuracy' in st.session_state and 'field_trials' in st.session_state:
-        st.subheader("Model Performance")
-        st.markdown("""
-        - 🌱 **87% accuracy** in predicting soil nutrient status.
-        - ✅ **92% accuracy** in recommending appropriate interventions (validated using KALRO datasets).
-        """)
-        
-        st.subheader("Field Trial Results (12 Counties)")
-        st.markdown("""
-        - 📈 **15–30% increase** in crop yields compared to conventional approaches.
-        - 💰 **Return on investment (ROI)** of:
-          - **2.4:1** in the first season
-          - **3.8:1** by the third season
-        """)
-        
-        st.subheader("Efficiency Gains")
-        st.markdown("""
-        - ♻️ **22% reduction** in fertilizer waste through precision input application.
-        - 🌍 **Measurable increase in soil organic carbon**:
-          - **0.4 tons** of carbon sequestered per hectare annually
-        """)
-        
-        st.subheader("Data Coverage Expansion")
-        st.markdown("""
-        - 📊 **47% improvement** in data coverage for previously data-scarce regions through transfer learning and integration of farmer observations.
-        """)
-    else:
-        st.markdown("Complete the **Data Upload & Training** and **Field Trials** sections to view the analytical outcomes.")
