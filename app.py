@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
 from imblearn.over_sampling import SMOTE
@@ -54,7 +54,7 @@ def load_embedded_data():
         logger.error(f"Data load error: {str(e)}")
         return None, None, None, None
 
-# Data loading for institution interface (unchanged)
+# Data loading for institution interface
 @st.cache_data
 def load_institution_data(source=""):
     try:
@@ -141,12 +141,8 @@ def train_models(df, features, target_nitrogen, target_phosphorus, user_type="In
             rf_select = RandomForestClassifier(n_estimators=50, random_state=42)
             rf_select.fit(X_train, y_train)
             selector = SelectFromModel(rf_select, prefit=True)
-            X_train_s = selector.transform(X_train)
-            param_grid = {'n_estimators': [50], 'max_depth': [10]}
-            rf_n = RandomForestClassifier(random_state=42)
-            grid = GridSearchCV(rf_n, param_grid, cv=3, scoring='accuracy', n_jobs=1)
-            grid.fit(X_train_s, y_train)
-            rf_nitrogen = grid.best_estimator_
+            rf_nitrogen = RandomForestClassifier(n_estimators=50, max_depth=10, random_state=42)
+            rf_nitrogen.fit(selector.transform(X_train), y_train)
             selected_features = X_combined.columns[selector.get_support()].tolist()
 
         if y_phosphorus is not None and len(df) > 3:
@@ -209,14 +205,14 @@ translations = {
         "gps": "Kuratibu za GPS",
         "low": "chini",
         "adequate": "ya kutosha",
-        "error": "Error",
-            "recommendations": {
-                "nitrogen_low": "Tumia kg 100/eka NPK 23:25:0; ongeza kg 50/eka CAN.",
-                "phosphorus_low": "Tumia kg 75/eka TSP.",
-                "low_ph": "Tumia kg 300-800/eka chokaa.",
-                "low_carbon": "Tumia tani 2-4/eka samadi.",
-                "none": "Hakuna ushauri wa pekee."
-            }
+        "error": "Hitilafu. Jaribu tena.",
+        "recommendations": {
+            "nitrogen_low": "Tumia kg 100/eka NPK 23:23:0; ongeza kg 50/eka CAN.",
+            "phosphorus_low": "Tumia kg 75/eka TSP.",
+            "low_ph": "Tumia kg 300-800/eka chokaa.",
+            "low_carbon": "Tumia tani 2-4/eka samadi.",
+            "none": "Hakuna ushauri wa pekee."
+        }
     }
 }
 
@@ -327,7 +323,7 @@ def generate_user_recommendations(county, ward, crop, symptoms, df, scaler, sele
         logger.error(f"Error: {str(e)}")
         return "", translations[lang]["recommendations"]["none"], translations[lang]["low"], translations[lang]["low"]
 
-# Institution recommendations (unchanged)
+# Institution recommendations
 def generate_institution_recommendations(county, input_data, df, scaler, selector, rf_nitrogen, rf_phosphorus, features, feature_cols):
     try:
         county_data = df[df['county'] == county][features].mean().to_dict() if county in df['county'].values else df[features].mean().to_dict()
