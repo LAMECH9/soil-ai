@@ -134,11 +134,11 @@ def train_models(df, features, target_nitrogen, target_phosphorus, user_type="In
             'salinity_ec': df['sodium meq'].values * 0.1 + np.random.normal(0, 0.05, num_samples) if 'sodium meq' in df.columns else np.random.normal(0.5, 0.1, num_samples)
         })
         farmer_data = pd.DataFrame({
-            'crop_stress': np.random.choice([0, 1], size=num_samples, p=[0.7, 0.3]),
-            'yellowing_leaves': np.where(df['total nitrogen'].values < 0.2, 
-                                         np.random.choice([0, 1], size=num_samples, p=[0.4, 0.6]), 
-                                         np.random.choice([0, 1], size=num_samples, p=[0.9, 0.1])) if 'total nitrogen' in df.columns else np.random.choice([0, 1], size=num_samples, p=[0.9, 0.0.1])
-        })
+    'crop_stress': np.random.choice([0, 1], size=num_samples, p=[0.7, 0.3]),
+    'yellowing_leaves': np.where(df['total nitrogen'].values < 0.2, 
+                                 np.random.choice([0, 1], size=num_samples, p=[0.4, 0.6]), 
+                                 np.random.choice([0, 1], size=num_samples, p=[0.9, 0.1])) if 'total nitrogen' in df.columns else np.random.choice([0, 1], size=num_samples, p=[0.9, 0.1])
+})
         climate_data = pd.DataFrame({
             'rainfall_mm': np.random.normal(600, 100, num_samples),
             'temperature_c': np.random.normal(25, 2, num_samples)
