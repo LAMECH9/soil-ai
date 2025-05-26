@@ -152,7 +152,7 @@ def train_models(df, features, target_nitrogen, target_phosphorus, user_type="In
         best_rf_nitrogen, nitrogen_accuracy, cv_scores, selected_features = None, 0.87, [], []
         rf_phosphorus, phosphorus_accuracy = None, 0.87
 
-        if y_nitrogen is not None and len(df) > 5:  # Minimum samples for SMOTE
+        if y_nitrogen is not None and len(df) > 5:
             k_neighbors = min(2, len(df) - 1) if len(df) > 2 else 1
             smote = SMOTE(random_state=42, k_neighbors=k_neighbors) if user_type == "User" else SMOTE(random_state=42)
             X_combined_n, y_nitrogen_balanced = smote.fit_resample(X_combined, y_nitrogen)
@@ -164,7 +164,7 @@ def train_models(df, features, target_nitrogen, target_phosphorus, user_type="In
             selector = SelectFromModel(rf_selector, prefit=True)
             X_train_n_selected = selector.transform(X_train_n)
             X_test_n_selected = selector.transform(X_test_n)
-            selected_features = X_combined.columns[selector.get_support()].tolist()
+            selected_features = X_combined.columns[,sp.get_support()].tolist()
             param_grid = {
                 'n_estimators': [50, 100],
                 'max_depth': [10, None],
@@ -214,18 +214,9 @@ translations = {
         "poor_soil_texture": "Poor soil texture",
         "acidic_soil": "Acidic soil",
         "get_recommendations": "Get Recommendations",
-        "nitrogen_status": "Nitrogen Status",
-        "phosphorus_status": "Phosphorus Status",
         "recommendation": "Recommendation for {crop} in {county}, {ward}",
         "sms_output": "SMS Version",
-        "gps_coordinates": "GPS Coordinates",
-        "low": "low",
-        "adequate": "adequate",
-        "high": "high",
-        "unknown": "unknown",
         "error_message": "Unable to process request. Try again or contact support.",
-        "input_error": "Please fill all required fields to get recommendations.",
-        "model_error": "Recommendation system is not ready. Please try again later or contact support.",
         "recommendations": {
             "nitrogen_low": "Apply 100 kg/acre N:P:K 23:23:0 at planting; top dress with 50 kg/acre CAN.",
             "phosphorus_low": "Apply 75 kg/acre triple superphosphate (TSP) at planting.",
@@ -246,18 +237,9 @@ translations = {
         "poor_soil_texture": "Udongo wa ubora wa chini",
         "acidic_soil": "Udongo wenye tindikali",
         "get_recommendations": "Pata Mapendekezo",
-        "nitrogen_status": "Hali ya Nitrojeni",
-        "phosphorus_status": "Hali ya Fosforasi",
         "recommendation": "Mapendekezo kwa {crop} katika {county}, {ward}",
         "sms_output": "Toleo la SMS",
-        "gps_coordinates": "Kuratibu za GPS",
-        "low": "chini",
-        "adequate": "ya kutosha",
-        "high": "juu",
-        "unknown": "haijulikani",
         "error_message": "Imeshindwa kuchakata ombi. Jaribu tena au wasiliana na usaidizi.",
-        "input_error": "Tafadhali jaza sehemu zote zinazohitajika ili kupata mapendekezo.",
-        "model_error": "Mfumo wa mapendekezo haujawa tayari. Jaribu tena baadaye au wasiliana na usaidizi.",
         "recommendations": {
             "nitrogen_low": "Tumia kg 100/eka N:P:K 23:23:0 wakati wa kupanda; ongeza kg 50/eka CAN juu.",
             "phosphorus_low": "Tumia kg 75/eka triple superphosphate (TSP) wakati wa kupanda.",
@@ -278,18 +260,9 @@ translations = {
         "poor_soil_texture": "Mũrĩthi wa ngai",
         "acidic_soil": "Mũrĩthi wa acidic",
         "get_recommendations": "Ruta Mapendekezo",
-        "nitrogen_status": "Ũhoro wa Nitrogen",
-        "phosphorus_status": "Ũhoro wa Phosphorus",
         "recommendation": "Mapendekezo ma {crop} mweri {county}, {ward}",
         "sms_output": "Toleo rĩa SMS",
-        "gps_coordinates": "GPS Coordinates",
-        "low": "hĩnĩ",
-        "adequate": "yakinyaga",
-        "high": "mũnene",
-        "unknown": "itangĩhũthĩka",
         "error_message": "Nĩ shida kũhithia maũndũ maku. Kĩra tena kana ũhũre support.",
-        "input_error": "Nĩ ũndũ ũtari wothe ũkĩrĩtie. Cagũra maũndũ mothe marĩa kũhitagwo kũruta mapendekezo.",
-        "model_error": "Mũhango wa mapendekezo ũtarĩ ready. Kĩra tena kana ũhũre support.",
         "recommendations": {
             "nitrogen_low": "Tumia kg 100/eka N:P:K 23:23:0 rĩngĩ wa kũrĩma; ongeza kg 50/eka CAN.",
             "phosphorus_low": "Tumia kg 75/eka triple superphosphate (TSP) rĩngĩ wa kũrĩma.",
@@ -349,39 +322,20 @@ def match_recommendations(generated, dataset):
                 return True
     return False
 
-# Simulate GPS coordinates
-def generate_gps(county, ward):
-    ward_gps_ranges = {
-        ("Kajiado", "Isinya"): {"lat": (-1.9, -1.7), "lon": (36.7, 36.9)},
-        ("Kajiado", "Kajiado Central"): {"lat": (-1.8, -1.6), "lon": (36.8, 37.0)},
-        ("Kajiado", "Ngong"): {"lat": (-1.4, -1.2), "lon": (36.6, 36.8)},
-        ("Kajiado", "Loitokitok"): {"lat": (-2.8, -2.6), "lon": (37.3, 37.5)},
-        ("Narok", "Narok North"): {"lat": (-1.0, -0.8), "lon": (35.7, 35.9)},
-        ("Narok", "Narok South"): {"lat": (-1.5, -1.3), "lon": (35.6, 35.8)},
-        ("Nakuru", "Nakuru East"): {"lat": (-0.3, -0.1), "lon": (36.1, 36.3)},
-        ("Kiambu", "Kiambaa"): {"lat": (-1.1, -0.9), "lon": (36.7, 36.9)},
-        ("Murang'a", "Kigumo"): {"lat": (-0.8, -0.6), "lon": (37.0, 37.2)},
-        ("Nyeri", "Mathira"): {"lat": (-0.4, -0.2), "lon": (37.0, 37.2)}
-    }
-    ranges = ward_gps_ranges.get((county, ward), {"lat": (-1.0, 1.0), "lon": (36.0, 38.0)})
-    lat = np.random.uniform(ranges["lat"][0], ranges["lat"][1])
-    lon = np.random.uniform(ranges["lon"][0], ranges["lon"][1])
-    return lat, lon
-
 # User-specific recommendation logic
 def generate_user_recommendations(county, ward, crop_type, symptoms, df, scaler, selector, best_rf_nitrogen, rf_phosphorus, features, feature_columns, language="English"):
     try:
-        # Check if required models and data are available
-        if not all([df is not None, not df.empty, scaler is not None, best_rf_nitrogen is not None, rf_phosphorus is not None]):
-            return "", translations[language]["recommendations"]["none"], translations[language]["unknown"], translations[language]["unknown"]
-
-        # Prepare input data based on county
+        # Validate inputs
+        if not county or not ward or not crop_type:
+            return "", translations[language]["recommendations"]["none"]
+        
+        # Use county-specific data if available, else use dataset mean
         if 'county' in df.columns and county in df['county'].values:
             county_data = df[df['county'] == county][features].mean().to_dict()
         else:
             county_data = df[features].mean().to_dict()
 
-        # Adjust input data based on symptoms
+        # Adjust data based on symptoms
         if translations[language]["yellowing_leaves"] in symptoms:
             county_data['total nitrogen'] = max(0, county_data['total nitrogen'] * 0.8)
         if translations[language]["stunted_growth"] in symptoms:
@@ -391,11 +345,14 @@ def generate_user_recommendations(county, ward, crop_type, symptoms, df, scaler,
         if translations[language]["acidic_soil"] in symptoms:
             county_data['soil ph'] = min(county_data['soil ph'], 5.0)
 
-        # Prepare input DataFrame
+        # Ensure all features have valid values
+        for feature in features:
+            if pd.isna(county_data.get(feature)):
+                county_data[feature] = df[feature].mean() if feature in df.columns else 0.0
+
         input_df = pd.DataFrame([county_data])
         X_scaled = scaler.transform(input_df[features])
 
-        # Add additional data
         additional_data = pd.DataFrame({
             'NDVI': [np.random.normal(0.6, 0.1)],
             'soil_moisture': [np.random.normal(0.3, 0.05)],
@@ -408,26 +365,28 @@ def generate_user_recommendations(county, ward, crop_type, symptoms, df, scaler,
         })
         X_combined_input = pd.concat([pd.DataFrame(X_scaled, columns=features), additional_data], axis=1)
         X_combined_input = X_combined_input[[col for col in feature_columns if col in X_combined_input.columns]]
+
+        # Ensure models are available
+        if best_rf_nitrogen is None or rf_phosphorus is None:
+            return "", translations[language]["recommendations"]["none"]
+
         X_selected = selector.transform(X_scaled) if selector else X_scaled
 
-        # Make predictions
-        nitrogen_pred = best_rf_nitrogen.predict(X_selected)[0] if best_rf_nitrogen else 0
-        phosphorus_pred = rf_phosphorus.predict(X_combined_input)[0] if rf_phosphorus else 0
-        nitrogen_class = translations[language]["low"] if nitrogen_pred == 0 else translations[language]["adequate"] if nitrogen_pred == 1 else translations[language]["high"]
-        phosphorus_class = translations[language]["low"] if phosphorus_pred == 0 else translations[language]["adequate"] if phosphorus_pred == 1 else translations[language]["high"]
+        nitrogen_pred = best_rf_nitrogen.predict(X_selected)[0]
+        phosphorus_pred = rf_phosphorus.predict(X_combined_input)[0]
+        nitrogen_class = translations["English"]["low"] if nitrogen_pred == 0 else translations["English"]["adequate"] if nitrogen_pred == 1 else translations["English"]["high"]
+        phosphorus_class = translations["English"]["low"] if phosphorus_pred == 0 else translations["English"]["adequate"] if phosphorus_pred == 1 else translations["English"]["high"]
 
-        # Store predictions in English for recommendation generation
-        input_df['nitrogen_class_str'] = translations["English"]["low"] if nitrogen_pred == 0 else translations["English"]["adequate"] if nitrogen_pred == 1 else translations["English"]["high"]
-        input_df['phosphorus_class_str'] = translations["English"]["low"] if phosphorus_pred == 0 else translations["English"]["adequate"] if phosphorus_pred == 1 else translations["English"]["high"]
+        input_df['nitrogen_class_str'] = nitrogen_class
+        input_df['phosphorus_class_str'] = phosphorus_class
         recommendation = generate_recommendations(input_df.iloc[0], language)
 
-        # Generate SMS output
         sms_output = f"SoilSync AI: {translations[language]['recommendation'].format(crop=crop_type, county=county, ward=ward)}: {recommendation.replace('; ', '. ')}"
 
-        return sms_output, recommendation, phosphorus_class, nitrogen_class
+        return sms_output, recommendation
     except Exception as e:
         st.error(f"Error generating recommendations: {str(e)}")
-        return "", translations[language]["recommendations"]["none"], translations[language]["unknown"], translations[language]["unknown"]
+        return "", translations[language]["recommendations"]["none"]
 
 # Institution-specific recommendation logic
 def generate_institution_recommendations(county, input_data, df, scaler, selector, best_rf_nitrogen, rf_phosphorus, features, feature_columns):
@@ -493,7 +452,7 @@ else:
 if user_type == "User":
     try:
         df, features, target_nitrogen, target_phosphorus = load_sample_data()
-        if df is not None and not df.empty and (not st.session_state['user'].get('df') or st.session_state['user'].get('df') is None or st.session_state['user']['df'].empty):
+        if df is not None and (not st.session_state['user'].get('df') or st.session_state['user']['df'] is None):
             (best_rf_nitrogen, rf_phosphorus, scaler, selector, feature_columns, 
              nitrogen_accuracy, phosphorus_accuracy, avg_accuracy, cv_scores, 
              selected_features) = train_models(df, features, target_nitrogen, target_phosphorus, user_type="User")
@@ -515,10 +474,6 @@ if user_type == "User":
                 'roi_season1': [2.4] * 12,
                 'roi_season3': [3.8] * 12
             })
-        else:
-            if df is None or df.empty:
-                st.error("Failed to load data: Dataset is empty or invalid.")
-                st.session_state['user']['df'] = None
     except Exception as e:
         st.error(f"Failed to load data or train models: {str(e)}")
         st.session_state['user']['df'] = None
@@ -529,15 +484,20 @@ if user_type == "User" and page == "Farmer Dashboard":
     st.markdown(translations[language]["welcome"], unsafe_allow_html=True)
     st.markdown(translations[language]["instructions"])
 
-    # Check if required session state variables are initialized
-    required_keys = ['df', 'scaler', 'best_rf_nitrogen', 'rf_phosphorus', 'features', 'feature_columns']
-    if not all(key in st.session_state['user'] and st.session_state['user'][key] is not None and (key != 'df' or not st.session_state['user']['df'].empty) for key in required_keys):
-        st.error(translations[language]["model_error"])
+    if 'df' not in st.session_state['user'] or st.session_state['user']['df'] is None:
+        st.error(translations[language]["error_message"])
     else:
         with st.form("farmer_input_form"):
-            county = st.selectbox(translations[language]["select_county"], options=sorted(st.session_state['user']['df']['county'].unique()))
-            ward = st.selectbox(translations[language]["select_ward"], options=county_ward_mapping.get(county, ["Unknown"]))
-            crop_type = st.selectbox(translations[language]["select_crop"], options=["Maize", "Beans", "Potatoes", "Wheat", "Sorghum"])
+            st.subheader(translations[language]["select_county"])
+            county_options = sorted(st.session_state['user']['df']['county'].unique())
+            county = st.selectbox(translations[language]["select_county"], options=[""] + county_options, index=0)
+
+            st.subheader(translations[language]["select_ward"])
+            ward_options = county_ward_mapping.get(county, ["Unknown"]) if county else ["Please select a county"]
+            ward = st.selectbox(translations[language]["select_ward"], options=[""] + ward_options, index=0)
+
+            crop_type = st.selectbox(translations[language]["select_crop"], 
+                                     options=["", "Maize", "Beans", "Potatoes", "Wheat", "Sorghum"], index=0)
             symptoms = st.multiselect(translations[language]["select_symptoms"], 
                                       options=[translations[language]["yellowing_leaves"], 
                                                translations[language]["stunted_growth"], 
@@ -546,28 +506,26 @@ if user_type == "User" and page == "Farmer Dashboard":
             submit_button = st.form_submit_button(translations[language]["get_recommendations"])
 
         if submit_button:
-            # Validate inputs
-            if not county or not ward or not crop_type:
-                st.error(translations[language]["input_error"])
-            else:
-                with st.spinner("Generating recommendations..."):
-                    try:
-                        sms_output, recommendation, phosphorus_class, nitrogen_class = generate_user_recommendations(
+            with st.spinner("Generating recommendations..."):
+                try:
+                    if not county or not ward or not crop_type:
+                        st.error(translations[language]["error_message"])
+                    else:
+                        sms_output, recommendation = generate_user_recommendations(
                             county, ward, crop_type, symptoms, st.session_state['user']['df'], 
                             st.session_state['user']['scaler'], st.session_state['user']['selector'], 
                             st.session_state['user']['best_rf_nitrogen'], st.session_state['user']['rf_phosphorus'], 
                             st.session_state['user']['features'], st.session_state['user']['feature_columns'], language
                         )
-                        lat, lon = generate_gps(county, ward)
-                        st.success("Recommendations Generated!")
-                        st.markdown(f"**{translations[language]['nitrogen_status']}**: {nitrogen_class}")
-                        st.markdown(f"**{translations[language]['phosphorus_status']}**: {phosphorus_class}")
-                        st.markdown(f"**{translations[language]['recommendation'].format(crop=crop_type, county=county, ward=ward)}**: {recommendation}")
-                        st.markdown(f"**{translations[language]['sms_output']}**:")
-                        st.code(sms_output)
-                        st.markdown(f"**{translations[language]['gps_coordinates']}**: Latitude: {lat:.6f}, Longitude: {lon:.6f}")
-                    except Exception as e:
-                        st.error(f"Error generating recommendations: {str(e)}")
+                        if recommendation == translations[language]["recommendations"]["none"]:
+                            st.warning(translations[language]["error_message"])
+                        else:
+                            st.success("Recommendations Generated!")
+                            st.markdown(f"**{translations[language]['recommendation'].format(crop=crop_type, county=county, ward=ward)}**: {recommendation}")
+                            st.markdown(f"**{translations[language]['sms_output']}**:")
+                            st.code(sms_output)
+                except Exception as e:
+                    st.error(f"Error generating recommendations: {str(e)}")
 
 # Home page
 if page == "Home":
